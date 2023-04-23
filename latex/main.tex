@@ -1,7 +1,6 @@
 \documentclass[11pt]{article}
 
 %PAKKER
-\usepackage[danish]{babel}
 \usepackage{amsmath, amssymb, amsthm, amsfonts}
 \usepackage{fancyhdr}
 \usepackage[margin=1.25in]{geometry}
@@ -28,9 +27,15 @@
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}
 \allowdisplaybreaks
+
+%BIBTEX
+\bibliographystyle{plain}
+
 %TITEL
-\title{\vspace{-4cm}Regneøvelser}
+\title{\vspace{-4cm}Project In Statistics}
 \author{Lucas Støjko Andersen}
 \maketitle
-
+\section{Hello}
+En test\cite{texbook}
+\bibliography{refs}
 \end{document}
