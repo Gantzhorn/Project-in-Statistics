@@ -1,4 +1,4 @@
-out: main.tex
+run: main.tex
 	pdflatex -halt-on-error --shell-escape main
 	@bibtex main
 	@pdflatex -halt-on-error --shell-escape main 2>&1 >/dev/null
