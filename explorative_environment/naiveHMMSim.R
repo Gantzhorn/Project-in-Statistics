@@ -10,7 +10,7 @@ A <- matrix(c(1/3, 1/3, 1/3,
             nrow = N, byrow = TRUE) # State transition matrix
 
 # Number of time-steps
-T <- 10000
+T <- 300
 
 # Simulate the hidden state sequence
 hidden_seq <- rep(0, T)
@@ -20,17 +20,36 @@ for (t in 2:T) {
 }
 
 # Simulate the observations
-obs_seq <- rep(0, T)
+obs_mat <- matrix(nrow = T, ncol = 2)
 for (t in 1:T) {
-  obs_seq[t] <- (hidden_seq[t] == 1)*rbeta(1, shape1 = 0.5, shape2 = 0.5) +
-    (hidden_seq[t] == 2)*rnorm(1, mean = 3) + (hidden_seq[t] == 3)*rgamma(1, shape = 5, rate = 2)
+  # X-coordinate
+  obs_mat[t,1] <- (hidden_seq[t] == 1)*rbeta(1, shape1 = 0.5, shape2 = 0.5) +
+    (hidden_seq[t] == 2)*rexp(1, rate = 1) +
+    (hidden_seq[t] == 3)*rgamma(1, shape = 5, rate = 4)
+  # Y-coordinate
+  obs_mat[t,2] <- (hidden_seq[t] == 1)*rnorm(1) +
+    (hidden_seq[t] == 2)*rnorm(1, mean = 0, sd = 5) + 
+    (hidden_seq[t] == 3)*rnorm(1, mean = 0, sd = 10)
 }
 
 
 # Return the simulated hidden state sequence and observation sequence
-simResult <- tibble(hidden = factor(hidden_seq), obs = obs_seq)
+simResult <- tibble(state = factor(hidden_seq),
+                    x = obs_mat[,1], y = obs_mat[,2],
+                    ID = factor(rep(c(1,2,3), each = T/3))) %>% 
+  tibble::rowid_to_column("time") %>% 
+  mutate(time = case_when(
+    ID == "2" ~ time-T/3,
+    ID == "3" ~ time-2*(T/3),
+    TRUE ~ time
+  ))
 
-# plot res
-simResult %>% ggplot(aes(x = obs, fill = hidden)) + geom_density()
+simResult %>% pivot_longer(cols = c("x", "y"),
+                           names_to = "coord_lab", values_to = "coord_val") %>%
+  mutate(coord_lab = factor(coord_lab)) %>% 
+  ggplot(aes(x = time, y = coord_val)) + geom_line() +
+  facet_grid(coord_lab~ID, scales = "free") +
+  geom_point(aes(x = time, y = coord_val, color = state))
 
-momentuHMM::fitHMM
+
+
