@@ -3,8 +3,8 @@ library(momentuHMM)
 theme_set(theme_bw())
 # Define the parameters of the HMM
 N <- 3
-pi <- c(0.5, 0.25, 0.25)
-A <- matrix(c(0.8, 0.1, 0.1,
+delta <- c(0.5, 0.25, 0.25)
+Gamma <- matrix(c(0.8, 0.1, 0.1,
               0.1, 0.8, 0.1,
               0.05, 0.05, 0.9),
             nrow = N, byrow = TRUE) # State transition matrix
@@ -14,21 +14,16 @@ T <- 500
 
 # Simulate the hidden state sequence
 s <- rep(0, T)
-s[1] <- sample(1:N, size = 1, prob = pi)
-for (t in 2:T) {
-  s[t] <- sample(1:N, size = 1, prob = A[s[t-1],])
-}
-
+s[1] <- sample(1:N, size = 1, prob = delta)
+s[2:T] <- sample(1:N, size = T-1, prob = Gamma[s[1:T-1],], replace=TRUE)
 # Simulate the observations
 obs_mat <- matrix(nrow = T, ncol = 2)
 
 # Parameters for gamma distributions of horizontal distances
-
-# Parameters for normal distributions for vertical distances
-
 alpha <- c(1, 2, 2)
 beta <- c(2, 1, 0.25)
 
+# Parameters for normal distributions for vertical distances
 mu <- c(-1, 0, 1)
 sigma <- c(0.5, 0.25, 0.5)
 

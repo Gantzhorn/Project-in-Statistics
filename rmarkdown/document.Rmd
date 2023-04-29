@@ -1,14 +1,27 @@
 ---
 title: "Project In Statistics"
 author: "Anders Gantzhorn Kristensen"
-date: "2023-04-23"
+date: "2023-04-29"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(momentuHMM)
+theme_set(theme_bw())
 ```
 
 # Test
 
 Check if everything works
+
+```{r, include=FALSE}
+eagleData <- readr::read_csv("GoldenEagle_FinalData_Dryad_FE.csv")
+```
+
+```{r}
+eagleData %>% ggplot(aes(x = log(Altitude), y = log(Step_length))) + geom_point()
+```
+
+
