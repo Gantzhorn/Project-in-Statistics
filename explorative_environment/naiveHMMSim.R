@@ -14,7 +14,7 @@ Gamma <- matrix(c(0.5, 0.25, 0.25,
             nrow = N, byrow = TRUE) # State transition matrix
 
 # Number of time-steps
-T <- 3000
+T <- 
 
 # Simulate the hidden state sequence
 s <- rep(0, T)
@@ -24,42 +24,41 @@ s[2:T] <- sample(1:N, size = T-1, prob = Gamma[s[1:T-1],], replace=TRUE)
 obs_mat <- matrix(nrow = T, ncol = 2)
 
 # Parameters for weibull distributions of horizontal distances
-lambda <- c(3, 20, 50)
-k <- c(5, 3, 3.5)
+k <- c(3, 20, 50)
+lambda <- c(5, 3, 3.5)
 
 # Parameters for normal distributions for vertical distances
 mu <- c(-3, 0, 3)
 sigma <- c(0.5, 0.25, 0.5)
 
 # X-coordinate
-obs_mat[,1] <- rweibull(T, shape = k[s], scale = lambda[s])
+obs_mat[,1] <- rweibull(T, scale = lambda[s], shape = k[s])
 # Y-coordinate
 obs_mat[,2] <- rnorm(T, mean = mu[s], sd = sigma[s])
 
 
 
 # Return the simulated hidden state sequence and observation sequence
-simResult <- tibble(state = factor(s),
-                    x = obs_mat[,1], y = obs_mat[,2]) %>%
-  tibble::rowid_to_column("time")
-# Nice plots
-simResult %>% ggplot(aes(x = y, fill = state)) + geom_density()  +
-  scale_fill_manual(values = proj_palette)
-
-simResult %>% ggplot(aes(x = log(x), y = y, color = state)) + geom_point()  +
-  scale_color_manual(values = proj_palette)
-
-simResult %>% pivot_longer(cols = c("x", "y"),
-                           names_to = "coord_lab", values_to = "coord_val") %>%
-  mutate(coord_lab = factor(coord_lab)) %>%
-  ggplot(aes(x = coord_val, color = state)) + geom_density() +
-  facet_wrap(~coord_lab, scales = "free") + scale_color_manual(values = proj_palette)
+# simResult <- tibble(state = factor(s),
+#                     x = obs_mat[,1], y = obs_mat[,2]) %>%
+#   tibble::rowid_to_column("time")
+# # Nice plots
+# simResult %>% ggplot(aes(x = y, fill = state)) + geom_density()  +
+#   scale_fill_manual(values = proj_palette)
+# 
+# simResult %>% ggplot(aes(x = log(x), y = y, color = state)) + geom_point()  +
+#   scale_color_manual(values = proj_palette)
+# 
+# simResult %>% pivot_longer(cols = c("x", "y"),
+#                            names_to = "coord_lab", values_to = "coord_val") %>%
+#   mutate(coord_lab = factor(coord_lab)) %>%
+#   ggplot(aes(x = coord_val, color = state)) + geom_density() +
+#   facet_wrap(~coord_lab, scales = "free") + scale_color_manual(values = proj_palette)
 
 # Fit model
 # Init values for mean and variance of gamma and normal
 lambda0 <- lambda
 k0 <- k
-
 mu0 <- mu
 sigma0 <- sigma
 
@@ -93,11 +92,13 @@ modDim2 <- fitHMM(data = Prep_data2,
               nbStates = N,
               dist = list(horizontal_steps = "weibull",
                           vertical_steps = "norm"),
-              Par0 = list(horizontal_steps = c(lambda0, k0),
+              Par0 = list(horizontal_steps = c(k0, lambda0),
                           vertical_steps = c(mu0, sigma0))
               )
 
-#plot(modDim2)
+str(modDim2$mle$horizontal_steps)
+
+plot(modDim2)
 
 DecodedStates2 <- viterbi(m = modDim2) #Most likely state-sequence - compare to true state sequence.
 
@@ -105,20 +106,3 @@ DecodedStates2 <- viterbi(m = modDim2) #Most likely state-sequence - compare to 
 mean(DecodedStates2 == s) # Classification accuracy
 
 mean(DecodedStates2 != s)
-
-# Try using build-in methods
-Prep_data3 <- simData(1, N, dist = list(horizontal_steps = "weibull", vertical_steps = "norm"),
-        Par = list(horizontal_steps = c(lambda, k), vertical_steps = c(mu, sigma)),
-        delta = delta)
-
-modDim3 <- fitHMM(data = Prep_data3,
-                  nbStates = N,
-                  dist = list(horizontal_steps = "weibull",
-                              vertical_steps = "norm"),
-                  Par0 = list(horizontal_steps = c(lambda0, k0),
-                              vertical_steps = c(mu0, sigma0))
-)
-
-plot(modDim3)
-
-DecodedStates3 <- viterbi(m = modDim3) #Most likely state-sequence - compare to true state sequence.

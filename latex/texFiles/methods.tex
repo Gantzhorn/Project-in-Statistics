@@ -1,7 +1,7 @@
 We primarily implement and find our results using the R langauge.
 Not only do we implement our own software, the package \code{momentuHMM} \cite{momentuHMM} is a paramount part the modelling process itself. However, we first introduce underlying model and its assumptions.
 \subsection*{Model formulation}
-The two stochastics processes from the Hidden Markov Model are: the state process, $S_t$ and the observation $\mathbf{Y_t}$, which are latent and observed respectively. The variation of the HMM we work with is a discrete-time and finite state HMM i.e. $t\in\{1,\dots , M\}$ and $S_t\in\{1,\dots , N\}$ for some $M, N\in\mathbb{N}$. We assume that the state space is determined by an initial probability vector, $\delta = \left(\delta_1,\dots, \delta_N \right)$. Furthermore, it has transition probability matrix
+The two stochastics processes from the Hidden Markov Model are: the state process, $S_t$ and the observation $\mathbf{Y_t}$, which are latent and observed respectively. The variation of the HMM we work with is a discrete-time and finite state HMM i.e. $t\in\{1,\dots , T\}$ and $S_t\in\{1,\dots , N\}$ for some $T, N\in\mathbb{N}$. We assume that the state space is determined by an initial probability vector, $\delta = \left(\delta_1,\dots, \delta_N \right)$. Furthermore, it has transition probability matrix
 \[
     \Gamma = \begin{pmatrix}
         \gamma_{11} & \dots &  \gamma_{1N} \\
