@@ -21,7 +21,7 @@ eagleData <- readr::read_csv("GoldenEagle_FinalData_Dryad_FE.csv")
 ```
 
 ```{r}
-eagleData %>% ggplot(aes(x = log(Altitude), y = log(Step_length))) + geom_point()
+ggplot(eagleData, aes(x = Altitude)) + geom_density()
 ```
 
 
