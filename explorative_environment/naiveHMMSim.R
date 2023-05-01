@@ -14,10 +14,10 @@ Gamma <- matrix(c(0.5, 0.25, 0.25,
             nrow = N, byrow = TRUE) # State transition matrix
 
 # Number of time-steps
-T <- 500
+T <- 2000
 # Parameters for weibull distributions of horizontal distances
-k <- c(3, 20, 50)
-lambda <- c(5, 3, 3.5)
+k <- c(3, 15, 50)
+lambda <- c(2, 4, 10)
 
 # Parameters for normal distributions for vertical distances
 mu <- c(-3, 0, 3)
