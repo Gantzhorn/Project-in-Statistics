@@ -11,7 +11,7 @@
 \usepackage{calrsfs}
 %QED SYMBOL
 \renewcommand{\qedsymbol}{$\blacksquare$}
-
+\def\code#1{\texttt{#1}}
 %AFSNIT OG HEADHEIGHT
 \setlength{\parindent}{0.5cm}
 \setlength{\headheight}{15pt}
@@ -23,7 +23,7 @@
 \fancyfoot[C]{\thepage}
 \fancyhead[C]{Project In Statistics}
 \fancyhead[L]{Anders Gantzhorn Kristensen}
-\fancyhead[R]{\today}
+\fancyhead[R]{16-06-2023}
 \renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}
 \allowdisplaybreaks
@@ -32,10 +32,24 @@
 \bibliographystyle{plain}
 
 %TITEL
-\title{\vspace{-4cm}Project In Statistics}
-\author{Anders Gantzhorn Kristensen}
+\title{\vspace{-4cm}Project In Statistics\\
+Modelling three-dimensional movements using
+multivariate hidden Markov models}
+\author{Anders Gantzhorn Kristensen\\
+Supervisor: Timo Adam}
+\date{16th of June, 2023}
 \maketitle
-\section{Hello}
-En test\cite{texbook}
+\section*{Introduction}
+
+\input{texFiles/introduction.tex}
+\section*{Methods}
+\input{texFiles/methods.tex}
+\section*{Simulation}
+\input{texFiles/simulation.tex}
+\section*{Application}
+\input{texFiles/application.tex}
+\section*{Discussion}
+\input{texFiles/discussion.tex}
+%En test\cite{texbook}
 \bibliography{refs}
 \end{document}

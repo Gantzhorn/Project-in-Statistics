@@ -18,8 +18,8 @@
 
 % Add the edges
 \path[->, very thick] (beginning)  edge[] node[midway, above] {$\dots$} (state1)
-          (state1) edge[] node[midway, above] {$\gamma_{t-1,t}$} (state2)
-          (state2) edge[] node[midway, above] {$\gamma_{t,t+1}$} (state3)
+          (state1) edge[] node[midway, above] {$\gamma_{(t-1)t}$} (state2)
+          (state2) edge[] node[midway, above] {$\gamma_{t(t+1)}$} (state3)
           (state1) edge node[midway, left] {} (obs1)
           (state2) edge node[midway, left] {} (obs2)
           (state3) edge node[midway, right] {} (obs3)
