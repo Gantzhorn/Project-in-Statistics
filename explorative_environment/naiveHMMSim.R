@@ -46,21 +46,21 @@ simulate_HMM <- function(T, delta, Gamma, lambda, k, mu, sigma) {
 simRes <- simulate_HMM(T, delta, Gamma, lambda, k, mu, sigma)
 
 # Return the simulated hidden state sequence and observation sequence
-# simResult <- tibble(state = factor(simRes$s),
-#                     x = simRes$obs_mat[,1], y = simRes$obs_mat[,2]) %>%
-#   tibble::rowid_to_column("time")
+simResult <- tibble(state = factor(simRes$s),
+                    x = simRes$obs_mat[,1], y = simRes$obs_mat[,2]) %>%
+  tibble::rowid_to_column("time")
 # Nice plots
-# simResult %>% ggplot(aes(x = y, fill = state)) + geom_density()  +
-#   scale_fill_manual(values = proj_palette)
-# 
-# simResult %>% ggplot(aes(x = log(x), y = y, color = state)) + geom_point()  +
-#   scale_color_manual(values = proj_palette)
-# 
-# simResult %>% pivot_longer(cols = c("x", "y"),
-#                            names_to = "coord_lab", values_to = "coord_val") %>%
-#   mutate(coord_lab = factor(coord_lab)) %>%
-#   ggplot(aes(x = coord_val, color = state)) + geom_density() +
-#   facet_wrap(~coord_lab, scales = "free") + scale_color_manual(values = proj_palette)
+simResult %>% ggplot(aes(x = y, fill = state)) + geom_density()  +
+  scale_fill_manual(values = proj_palette)
+
+simResult %>% ggplot(aes(x = x, y = y, color = state)) + geom_point()  +
+  scale_color_manual(values = proj_palette)
+
+simResult %>% pivot_longer(cols = c("x", "y"),
+                           names_to = "coord_lab", values_to = "coord_val") %>%
+  mutate(coord_lab = factor(coord_lab)) %>%
+  ggplot(aes(x = coord_val, fill = state)) + geom_density() +
+  facet_wrap(~coord_lab, scales = "free") + scale_fill_manual(values = proj_palette)
 
 # Fit model
 # Init values for mean and variance of gamma and normal
@@ -80,7 +80,7 @@ modDim1 <- fitHMM(data = Prep_data1,
               dist = list(vertical_steps = "norm"),
               Par0 = list(vertical_steps = c(mu0, sigma0))
 )
-#plot(modDim1)
+plot(modDim1)
 
 
 DecodedStates1 <- viterbi(m = modDim1) #Most likely state-sequence - compare to true state sequence.
