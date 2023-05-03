@@ -16,12 +16,12 @@ Gamma <- matrix(c(0.5, 0.25, 0.25,
 # Number of time-steps
 T <- 2000
 # Parameters for weibull distributions of horizontal distances
-k <- c(3, 15, 50)
-lambda <- c(2, 4, 10)
+k <- c(3, 10, 12)
+lambda <- c(2, 4, 6)
 
 # Parameters for normal distributions for vertical distances
-mu <- c(-3, 0, 3)
-sigma <- c(0.5, 0.25, 0.5)
+mu <- c(-1, 0, 1)
+sigma <- c(1, 0.5, 1)
 
 simulate_HMM <- function(T, delta, Gamma, lambda, k, mu, sigma) {
   
@@ -111,3 +111,38 @@ DecodedStates2 <- viterbi(m = modDim2) #Most likely state-sequence - compare to 
 mean(DecodedStates2 == simRes$s) # Classification accuracy
 
 mean(DecodedStates2 != simRes$s)
+
+### Accessing elements from the momentuHMM fit object
+modDim2$data # data used for fitting
+modDim2$mle # Estimate of parameters of observed chain, initial distribution
+# & probability transition matrix 
+
+modDim2$CIreal # Estimates and confidence intervals of the above
+
+modDim2$mod # mod estimates, gradient, hessian, numIter, min of neg loglik 
+# time to conv. etc.
+
+# play with the objects
+# plot confidence intervals for estimates
+verticalStepsmat <- cbind(modDim2$CIreal$vertical_steps$est,
+                          modDim2$CIreal$vertical_steps$lower,
+                          modDim2$CIreal$vertical_steps$upper)
+
+colnames(verticalStepsmat) <- c("estState1", "estState2", "estState3",
+                                "lowerState1", "lowerState2", "lowerState3",
+                                "upperState1", "upperState2", "upperState3")
+
+verticalSteps <- as_tibble(verticalStepsmat, rownames = "Parameter") %>% 
+  pivot_longer(cols = -Parameter, names_to = "Info",values_to = "Value") %>% 
+  mutate(State = factor(str_sub(Info, start = -1L, end = -1L)), Parameter = factor(Parameter),
+         Type = factor(case_when(str_detect(Info,"estState") ~ "Estimate",
+                          str_detect(Info,"lowerState") ~ "Lower",
+                          str_detect(Info,"upperState")  ~ "Upper"
+                          ))) %>% select(Parameter, Type, State, Value) %>% 
+  pivot_wider(names_from = "Type", values_from = "Value") %>% 
+  mutate(trueParam = c(mu, sigma))
+
+verticalSteps %>% ggplot(aes(x = State, y = Estimate)) +
+  geom_point() + geom_errorbar(aes(ymin = Lower, ymax = Upper)) +
+  facet_wrap(~Parameter, scale = "free") +
+  geom_point(aes(x = State, y = trueParam), col = "firebrick")
