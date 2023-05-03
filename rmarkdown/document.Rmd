@@ -17,7 +17,12 @@ theme_set(theme_bw())
 Check if everything works
 
 ```{r, include=FALSE}
-eagleData <- readr::read_csv("GoldenEagle_FinalData_Dryad_FE.csv")
+eagleDataOriginal <- readr::read_csv("GoldenEagle_FinalData_Dryad_FE.csv")
+eagleData <- eagleDataOriginal
+eagleData %>% mutate(Segment_ID = factor(Segment_ID))
+eagleData <- eagleData %>% group_by(Segment_ID) %>%
+    mutate(AltitudeDiff = Altitude - lag(Altitude, default = first(Altitude))) %>% 
+    slice(2:n())
 ```
 
 # Estimation
@@ -44,5 +49,24 @@ simWei <- rweibull(50000, shape = k_hat, scale = lambda_hat)
 
 tibble(x = c(simWei, eagleData$Step_length), type = rep(c("sim", "obs"), times = c(length(simWei), length(eagleData$Step_length)))) %>% ggplot(aes(x = x, color = type)) + geom_density()
 ```
-Might not be the best fit to the Data, but it is a start.
+Might not be the best fit to the Data, but it is a start.\
+Try to fit Gamma distribution:\
+MLE of shape parameter in gamma distribution is the solution to the equation:
+$$
+\log(\alpha)-\psi(\alpha) = \log\left(\frac{1}{N}\sum_{i=1}^N\log(X_i)\right)-\frac{1}{N}\sum_{i = 1}^N\log(X_i)
+$$
+Whereas the rate parameter is given by 
+$$\hat{\beta} = \frac{\hat{\alpha}}{\sum_{i = 1}^N X_i}$$
+
+```{r}
+alpha_hat <- uniroot(function(alpha) {log(alpha)-digamma(alpha)-log(mean(eagleData$Step_length))+mean(log(eagleData$Step_length))},c(0.1, 10))$root
+beta_hat <- alpha_hat/mean(eagleData$Step_length)
+
+simGamma <- rgamma(50000, shape = alpha_hat, rate = beta_hat)
+
+tibble(x = c(simGamma, eagleData$Step_length), type = rep(c("sim", "obs"), times = c(length(simGamma), length(eagleData$Step_length)))) %>% ggplot(aes(x = x, color = type)) + geom_density()
+```
+Indicating a bit better of a fit maybe.
+
+
 

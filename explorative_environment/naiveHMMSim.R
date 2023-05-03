@@ -7,7 +7,7 @@ proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
 
 # Define the parameters of the HMM
 N <- 3
-delta <- c(0.5, 0.25, 0.25)
+delta <- c(0.33, 0.33, 0.33)
 Gamma <- matrix(c(0.5, 0.25, 0.25,
                   0.25, 0.5, 0.25,
                   0.25, 0.25, 0.5),
