@@ -1,5 +1,8 @@
 library(tidyverse)
 library(momentuHMM)
+library(Rcpp)
+library(profvis)
+library(microbenchmark)
 theme_set(theme_bw())
 proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
                          "#F0E442", "#0072B2", "#D55E00",
@@ -8,7 +11,7 @@ proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
 # Helper function
 split_and_stack <- function(x, ncol) {
   # calculate number of rows needed
-  nrow <- length(x) / ncol
+  nrow <- ceiling(length(x) / ncol)
 
   # add padding to x to make its length a multiple of ncol
   x_pad <- c(x, rep(NA, nrow * ncol - length(x)))
@@ -18,6 +21,32 @@ split_and_stack <- function(x, ncol) {
 
   return(mat)
 }
+
+Rcpp::sourceCpp("naiveSimRcpp.cpp")
+
+autoplot(microbenchmark(sample.int(N, size = 5000, replace = TRUE, prob = delta),
+               sample(1:3, size = 5000, replace = TRUE, prob = delta),
+               times = 1000))
+
+benchData <- rnorm(100000)
+
+bench1 <- microbenchmark(split_and_stack(benchData, 2),
+                         split_and_stack_rcpp(benchData, 2),
+                         split_and_stack(benchData, 4),
+                         split_and_stack_rcpp(benchData, 4),
+                         split_and_stack(benchData, 8),
+                         split_and_stack_rcpp(benchData, 8),
+                         split_and_stack(benchData, 10),
+                         split_and_stack_rcpp(benchData, 10),
+                         split_and_stack(benchData, 16),
+                         split_and_stack_rcpp(benchData, 16),
+                         times = 100L) %>% as_tibble() %>%
+                         mutate(time = time/100000000000)
+bench1 <- bench1 %>% mutate(Language = factor(ifelse(str_detect(expr, "rcpp"), "Rcpp", "R")),
+                             paramNum = as.integer(str_extract(expr, "\\d+")))
+
+bench1 %>% ggplot(aes(x = factor(paramNum), y = log(time), fill = Language)) + geom_boxplot() +
+  scale_fill_manual(values = proj_palette)
 
 
 # Define the parameters of the HMM
@@ -38,21 +67,33 @@ lambda <- c(2, 4, 6)
 mu <- c(-1, 0, 1)
 sigma <- c(1, 0.5, 1)
 
-simulate_HMM <- function(T, delta, Gamma, dists, params) {
+simulate_HMM <- function(T = 500,
+                         delta,
+                         Gamma,
+                         dists,
+                         params,
+                         fastSampler = TRUE
+                         ) {
 
   N <- length(delta)
 
   # Simulate the hidden state sequence
   s <- rep(0, T)
+  if(fastSampler){
+    s[1] <- sample.int(N, size = 1, prob = delta)
+    s[2:T] <- sample.int(N, size = T-1, prob = Gamma[s[1:T-1],], replace=TRUE)
+  }
+  else{
   s[1] <- sample(1:N, size = 1, prob = delta)
   s[2:T] <- sample(1:N, size = T-1, prob = Gamma[s[1:T-1],], replace=TRUE)
-
+  }
   # Simulate the observations
   obs_mat <- matrix(nrow = T, ncol = 2)
 
   # X-coordinate
   dist1 <- match.fun(dists[1])
-  params_dist1 <- split_and_stack(params[[1]], ncol = N)
+  if(fastSampler){params_dist1 <- split_and_stack(params[[1]], ncol = N)}
+  else {params_dist1 <- split_and_stack_rcpp(params[[1]], ncol = N)}
   if (nrow(params_dist1) == 1){
     obs_mat[, 1] <- dist1(n = T, params_dist1[1, s])
   }
@@ -63,7 +104,8 @@ simulate_HMM <- function(T, delta, Gamma, dists, params) {
 
   # Y-coordinate
   dist2 <- match.fun(dists[2])
-  params_dist2 <- split_and_stack(params[[2]], ncol = N)
+  if(fastSampler){params_dist2 <- split_and_stack(params[[2]], ncol = N)}
+  else {params_dist2 <- split_and_stack_rcpp(params[[2]], ncol = N)}
   if (nrow(params_dist2) == 1){
     obs_mat[,2] <- dist2(n = T, params_dist2[1, s])
   }
