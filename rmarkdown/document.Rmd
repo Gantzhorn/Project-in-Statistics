@@ -21,11 +21,13 @@ eagleDataOriginal <- readr::read_csv("GoldenEagle_FinalData_Dryad_FE.csv")
 eagleData <- eagleDataOriginal
 eagleData %>% mutate(Segment_ID = factor(Segment_ID))
 eagleData <- eagleData %>% group_by(Segment_ID) %>%
-    mutate(AltitudeDiff = Altitude - lag(Altitude, default = first(Altitude))) %>% 
+    mutate(vertical_steps = Altitude - lag(Altitude, default = first(Altitude))) %>% 
+    rename(horizontal_steps = Step_length) %>% 
     slice(2:n())
 ```
 
-# Estimation
+
+# Estimation using Weibull- and Gamma distributions
 First assume that Step_length is Weibull distributed. The MLE of $k$ is the solution to
 $$
 0 = \frac{\sum_{i = 1}^N X_i^k\log(X_i)}{\sum_{i = 1}^N X_i^k} - \frac{1}{k} - \frac{1}{N}\sum_{i = 1}^N \log(X_i)
@@ -37,9 +39,9 @@ $$
 $$
 Thus we can calculate the MLE assuming step-length has a Weibull distribtion
 ```{r}
-k_hat <- uniroot(function(k) {sum(eagleData$Step_length^k * log(eagleData$Step_length)) / sum(eagleData$Step_length^k) - 1/k - mean(log(eagleData$Step_length))},
+k_hat <- uniroot(function(k) {sum(eagleData$horizontal_steps^k * log(eagleData$horizontal_steps)) / sum(eagleData$horizontal_steps^k) - 1/k - mean(log(eagleData$horizontal_steps))},
                     c(0.1, 10))$root
-lambda_hat <- (mean(eagleData$Step_length^k_hat))^(1/k_hat)
+lambda_hat <- (mean(eagleData$horizontal_steps^k_hat))^(1/k_hat)
 ```
 
 We can simulate from this distribution and compare with the data
@@ -47,26 +49,79 @@ We can simulate from this distribution and compare with the data
 ```{r}
 simWei <- rweibull(50000, shape = k_hat, scale = lambda_hat)
 
-tibble(x = c(simWei, eagleData$Step_length), type = rep(c("sim", "obs"), times = c(length(simWei), length(eagleData$Step_length)))) %>% ggplot(aes(x = x, color = type)) + geom_density()
+tibble(x = c(simWei, eagleData$horizontal_steps), type = rep(c("sim", "obs"), times = c(length(simWei), length(eagleData$horizontal_steps)))) %>% ggplot(aes(x = x, color = type)) + geom_density()
 ```
 Might not be the best fit to the Data, but it is a start.\
-Try to fit Gamma distribution:\
-MLE of shape parameter in gamma distribution is the solution to the equation:
+<!-- Try to fit Gamma distribution:\ -->
+<!-- MLE of shape parameter in gamma distribution is the solution to the equation: -->
+<!-- $$ -->
+<!-- \log(\alpha)-\psi(\alpha) = \log\left(\frac{1}{N}\sum_{i=1}^N\log(X_i)\right)-\frac{1}{N}\sum_{i = 1}^N\log(X_i) -->
+<!-- $$ -->
+<!-- Whereas the rate parameter is given by -->
+<!-- $$\hat{\beta} = \frac{\hat{\alpha}}{\sum_{i = 1}^N X_i}$$ -->
+
+<!-- ```{r} -->
+<!-- alpha_hat <- uniroot(function(alpha) {log(alpha)-digamma(alpha)-log(mean(eagleData$horizontal_steps))+mean(log(eagleData$horizontal_steps))},c(0.1, 10))$root -->
+<!-- beta_hat <- alpha_hat/mean(eagleData$horizontal_steps) -->
+
+<!-- simGamma <- rgamma(50000, shape = alpha_hat, rate = beta_hat) -->
+
+<!-- tibble(x = c(simGamma, eagleData$horizontal_steps), type = rep(c("sim", "obs"), times = c(length(simGamma), length(eagleData$horizontal_steps)))) %>% ggplot(aes(x = x, color = type)) + geom_density() -->
+<!-- ``` -->
+<!-- Indicating a bit better of a fit maybe. -->
+
+# Fitting the vertical steps to a normal distribution
+The MLE of the mean in the normal distribution is:
 $$
-\log(\alpha)-\psi(\alpha) = \log\left(\frac{1}{N}\sum_{i=1}^N\log(X_i)\right)-\frac{1}{N}\sum_{i = 1}^N\log(X_i)
+\hat{\mu} = \frac{1}{N}\sum_{i = 1}^N X_i
 $$
-Whereas the rate parameter is given by 
-$$\hat{\beta} = \frac{\hat{\alpha}}{\sum_{i = 1}^N X_i}$$
+Whereas the variance is:
+$$
+\hat{\mu} = \frac{1}{N}\sum_{i = 1}^N \left(X_i-\hat{\mu}\right)^2
+$$
+Which we implement.
+```{r}
+mu_hat <- mean(eagleData$vertical_steps)
+sigmasq_hat <- var(eagleData$vertical_steps)
+
+```
+
 
 ```{r}
-alpha_hat <- uniroot(function(alpha) {log(alpha)-digamma(alpha)-log(mean(eagleData$Step_length))+mean(log(eagleData$Step_length))},c(0.1, 10))$root
-beta_hat <- alpha_hat/mean(eagleData$Step_length)
-
-simGamma <- rgamma(50000, shape = alpha_hat, rate = beta_hat)
-
-tibble(x = c(simGamma, eagleData$Step_length), type = rep(c("sim", "obs"), times = c(length(simGamma), length(eagleData$Step_length)))) %>% ggplot(aes(x = x, color = type)) + geom_density()
+prepEagleData <- momentuHMM::prepData(data = data.frame(ID = eagleData$Segment_ID,
+                                       vertical_steps = eagleData$vertical_steps,
+                                       horizontal_steps = eagleData$horizontal_steps),
+                                       coordNames = NULL)
 ```
-Indicating a bit better of a fit maybe.
+# We fit the model using the parameters from above and decode the states
+```{r}
+N <- 3 
+# Initial values for weibull distributions of horizontal distances
+k0 <- rep(k_hat, times = N)
+lambda0 <- rep(lambda_hat, times = N)
 
+# Initial values for normal distributions for vertical distances
+mu0 <- rep(mu_hat, times = N)
+sigma0 <- rep(sigmasq_hat, times = N)
+eagleFit1 <- momentuHMM::fitHMM(prepEagleData,
+                   nbStates = N,
+                   dist = list(horizontal_steps = "weibull",
+                          vertical_steps = "norm"),
+                   Par0 = list(horizontal_steps = c(k0, lambda0),
+                          vertical_steps = c(mu0, sigma0))
+)
 
+decodedStatesFit1 <- viterbi(m = eagleFit1)
+
+```
+
+```{r}
+eagleData <- tibble(eagleData, decodedstates = decodedStatesFit1)
+```
+
+```{r}
+eagleData <- eagleData %>% mutate(decodedstates = factor(decodedstates))
+
+ggplot(filter(eagleData), aes(x = vertical_steps, y = log(horizontal_steps), col = decodedstates)) + geom_point()
+```
 
