@@ -2,12 +2,30 @@ library(tidyverse)
 library(momentuHMM)
 library(Rcpp)
 library(profvis)
+library(tseries)
 library(microbenchmark)
 theme_set(theme_bw())
 proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
                          "#F0E442", "#0072B2", "#D55E00",
                          "#CC79A7")
 
+# Define the parameters of the HMM
+N <- 3
+delta <- c(0.33, 0.33, 0.33)
+Gamma <- matrix(c(0.8, 0.1, 0.1,
+                  0.1, 0.8, 0.1,
+                  0.1, 0.1, 0.8),
+                nrow = N, byrow = TRUE) # State transition matrix
+
+# Number of time-steps
+T <- 5000
+# Parameters for weibull distributions of horizontal distances
+k <- c(3, 10, 12)
+lambda <- c(2, 4, 6)
+
+# Parameters for normal distributions for vertical distances
+mu <- c(-1, 0, 1)
+sigma <- c(1, 0.5, 1)
 # Helper function
 split_and_stack <- function(x, ncol) {
   # calculate number of rows needed
@@ -25,7 +43,7 @@ split_and_stack <- function(x, ncol) {
 Rcpp::sourceCpp("naiveSimRcpp.cpp")
 
 autoplot(microbenchmark(sample.int(N, size = 5000, replace = TRUE, prob = delta),
-               sample(1:3, size = 5000, replace = TRUE, prob = delta),
+               sample(1:N, size = 5000, replace = TRUE, prob = delta),
                times = 1000))
 
 benchData <- rnorm(100000)
@@ -49,23 +67,7 @@ bench1 %>% ggplot(aes(x = factor(paramNum), y = log(time), fill = Language)) + g
   scale_fill_manual(values = proj_palette)
 
 
-# Define the parameters of the HMM
-N <- 3
-delta <- c(0.33, 0.33, 0.33)
-Gamma <- matrix(c(0.8, 0.1, 0.1,
-                  0.1, 0.8, 0.1,
-                  0.1, 0.1, 0.8),
-            nrow = N, byrow = TRUE) # State transition matrix
 
-# Number of time-steps
-T <- 5000
-# Parameters for weibull distributions of horizontal distances
-k <- c(3, 10, 12)
-lambda <- c(2, 4, 6)
-
-# Parameters for normal distributions for vertical distances
-mu <- c(-1, 0, 1)
-sigma <- c(1, 0.5, 1)
 
 simulate_HMM <- function(T = 500,
                          delta,
@@ -225,3 +227,31 @@ verticalSteps %>% ggplot(aes(x = State, y = Estimate)) +
   geom_point() + geom_errorbar(aes(ymin = Lower, ymax = Upper)) +
   facet_wrap(~Parameter, scale = "free") +
   geom_point(aes(x = State, y = trueParam), col = "firebrick")
+
+# All very good let's access fit
+pseudoResmodDim2 <- momentuHMM::pseudoRes(modDim2)
+pseudoResTibble <- tibble(horizontal_stepsRes = pseudoResmodDim2[[1]],
+                          vertical_stepsRes = pseudoResmodDim2[[2]]
+                          ) %>% mutate(time = row_number())
+# replicate base plots made in this object with ggplot2
+momentuHMM::plotPR(modDim2)
+# Chain independence:
+pseudoResTibble %>% ggplot(aes(x = time, y = horizontal_stepsRes)) + geom_line()
+
+# QQ-plot
+pseudoResTibble %>% ggplot(aes(sample = horizontal_stepsRes)) + 
+  geom_qq() +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  labs(title = "QQ Plot of Horizontal Steps Residuals")
+
+# Make autocorrelation plots
+acf_vals <- acf(pseudoResTibble$horizontal_stepsRes, plot = FALSE)
+acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
+ggplot(acftib, aes(x = lag, y = ACF)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey") +
+  geom_segment(aes(xend = lag, yend = 0), color = "black") +
+  xlab("Lag") +
+  ylab("Autocorrelation") +
+  ggtitle("Autocorrelation plot of horizontal_stepsRes")
+
+
