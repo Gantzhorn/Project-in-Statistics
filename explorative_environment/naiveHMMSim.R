@@ -5,6 +5,11 @@ library(profvis)
 library(tseries)
 library(microbenchmark)
 theme_set(theme_bw())
+theme_set(theme(axis.line = element_line(size = 1.2),
+                axis.text = element_text(size=12),
+                axis.title = element_text(size=15)))
+
+
 proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
                          "#F0E442", "#0072B2", "#D55E00",
                          "#CC79A7")
@@ -41,10 +46,6 @@ split_and_stack <- function(x, ncol) {
 }
 
 Rcpp::sourceCpp("naiveSimRcpp.cpp")
-
-autoplot(microbenchmark(sample.int(N, size = 5000, replace = TRUE, prob = delta),
-               sample(1:N, size = 5000, replace = TRUE, prob = delta),
-               times = 1000))
 
 benchData <- rnorm(100000)
 
@@ -173,25 +174,7 @@ mean(DecodedStates2 == simRes$s) # Classification accuracy
 mean(DecodedStates2 != simRes$s)
 
 # Sim from model:
-M <- 30
-meanClassification <- numeric(M)
-
-for (i in 1:M){
-newSim <- simData(model = modDim2, nbStates = 3, obsPerAnimal = 5000)
-
-modSimFit <- fitHMM(data = newSim,
-                  nbStates = N,
-                  dist = list(horizontal_steps = "weibull",
-                              vertical_steps = "norm"),
-                  Par0 = list(horizontal_steps = c(k0, lambda0),
-                              vertical_steps = c(mu0, sigma0))
-)
-
-DecodedStatesSim <- viterbi(m = modSimFit)
-meanClassification[i] <- mean(DecodedStatesSim == simRes$s)
-}
-
-
+#newSim <- simData(model = modDim2, nbStates = 3, obsPerAnimal = 5000)
 
 ### Accessing elements from the momentuHMM fit object
 modDim2$data # data used for fitting
@@ -235,23 +218,56 @@ pseudoResTibble <- tibble(horizontal_stepsRes = pseudoResmodDim2[[1]],
                           ) %>% mutate(time = row_number())
 # replicate base plots made in this object with ggplot2
 momentuHMM::plotPR(modDim2)
+
 # Chain independence:
 pseudoResTibble %>% ggplot(aes(x = time, y = horizontal_stepsRes)) + geom_line()
 
-# QQ-plot
+# Histogram of residuals with standard normal distribution on top
+pseudoResTibble %>% ggplot(aes(x = vertical_stepsRes)) +
+  geom_histogram(aes(y = after_stat(density)),col = "black", fill = proj_palette[6], alpha = 0.8) + 
+  stat_function(fun = dnorm, args = list(mean = 0, sd = 1), color = proj_palette[5], size = 1)
+
+# QQ-plot of residuals
 pseudoResTibble %>% ggplot(aes(sample = horizontal_stepsRes)) + 
   geom_qq() +
   geom_abline(intercept = 0, slope = 1, color = "red") +
-  labs(title = "QQ Plot of Horizontal Steps Residuals")
+  labs(title = "QQ Plot of Horizontal Steps Pseudo Residuals")
 
 # Make autocorrelation plots
 acf_vals <- acf(pseudoResTibble$horizontal_stepsRes, plot = FALSE)
 acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
 ggplot(acftib, aes(x = lag, y = ACF)) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "grey") +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed", color = proj_palette[3]) +
   geom_segment(aes(xend = lag, yend = 0), color = "black") +
   xlab("Lag") +
-  ylab("Autocorrelation") +
-  ggtitle("Autocorrelation plot of horizontal_stepsRes")
+  ylab("Autocorrelation")
+
+# More formal test to test fit - jarque bera test on residuals
+jarqueBeraTest <- tseries::jarque.bera.test(pseudoResmodDim2$vertical_stepsRes)
+
+# Simulate to find bias in fit
+M <- 100 # Number of simulations
+classificationCheck <- numeric(M)
+
+BiasCheckSim <- simulate_HMM(T, delta, Gamma, dists = c("rweibull", "rnorm"), list(c(k, lambda), c(mu, sigma)))
+Prep_dataBiasCheck <- momentuHMM::prepData(data = data.frame(horizontal_steps = BiasCheckSim$obs_mat[,1],
+                                                     vertical_steps = BiasCheckSim$obs_mat[,2]),
+                                   coordNames = NULL)
+
+modBiacCheck <- fitHMM(data = Prep_dataBiasCheck,
+                  nbStates = N,
+                  dist = list(horizontal_steps = "weibull",
+                              vertical_steps = "norm"),
+                  Par0 = list(horizontal_steps = c(k0, lambda0),
+                              vertical_steps = c(mu0, sigma0))
+)
+
+DecodedStatesBiacCheck <- viterbi(m = modBiacCheck) #Most likely state-sequence - compare to true state sequence.
 
 
+classificationCheck[i] <- mean(DecodedStatesBiacCheck == BiasCheckSim$s) # Classification accuracy
+
+modBiacCheck$mle$horizontal_steps - matrix(c(k,lambda), ncol = N, byrow = TRUE)
+
+modBiacCheck$mle$vertical_steps - matrix(c(mu,sigma), ncol = N, byrow = TRUE)
