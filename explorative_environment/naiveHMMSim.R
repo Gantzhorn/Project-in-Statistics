@@ -5,9 +5,6 @@ library(profvis)
 library(tseries)
 library(microbenchmark)
 theme_set(theme_bw())
-theme_set(theme(axis.line = element_line(size = 1.2),
-                axis.text = element_text(size=12),
-                axis.title = element_text(size=15)))
 
 
 proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
@@ -17,9 +14,9 @@ proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
 # Define the parameters of the HMM
 N <- 3
 delta <- c(0.33, 0.33, 0.33)
-Gamma <- matrix(c(0.8, 0.1, 0.1,
-                  0.1, 0.8, 0.1,
-                  0.1, 0.1, 0.8),
+Gamma <- matrix(c(0.8, 0.2, 0.2,
+                  0.2, 0.6, 0.2,
+                  0.2, 0.2, 0.6),
                 nrow = N, byrow = TRUE) # State transition matrix
 
 # Number of time-steps
@@ -46,6 +43,7 @@ split_and_stack <- function(x, ncol) {
 }
 
 Rcpp::sourceCpp("naiveSimRcpp.cpp")
+
 
 benchData <- rnorm(100000)
 
@@ -245,6 +243,11 @@ ggplot(acftib, aes(x = lag, y = ACF)) +
 
 # More formal test to test fit - jarque bera test on residuals
 jarqueBeraTest <- tseries::jarque.bera.test(pseudoResmodDim2$vertical_stepsRes)
+jarque_bera_test_Rcpp(pseudoResmodDim2$vertical_stepsRes)
+
+microbenchmark::microbenchmark(tseries::jarque.bera.test(pseudoResmodDim2$vertical_stepsRes),
+                               jarque_bera_test_Rcpp(pseudoResmodDim2$vertical_stepsRes),
+                               times = 100)
 
 # Simulate to find bias in fit
 M <- 100 # Number of simulations
