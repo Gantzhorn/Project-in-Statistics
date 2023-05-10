@@ -218,7 +218,8 @@ pseudoResTibble <- tibble(horizontal_stepsRes = pseudoResmodDim2[[1]],
 momentuHMM::plotPR(modDim2)
 
 # Chain independence:
-pseudoResTibble %>% ggplot(aes(x = time, y = horizontal_stepsRes)) + geom_line()
+pseudoResTibble %>% ggplot(aes(x = time, y = horizontal_stepsRes)) +
+  geom_line(color = proj_palette[5])
 
 # Histogram of residuals with standard normal distribution on top
 pseudoResTibble %>% ggplot(aes(x = vertical_stepsRes)) +
@@ -243,21 +244,60 @@ ggplot(acftib, aes(x = lag, y = ACF)) +
 
 # More formal test to test fit - jarque bera test on residuals
 jarqueBeraTest <- tseries::jarque.bera.test(pseudoResmodDim2$vertical_stepsRes)
-jarque_bera_test_Rcpp(pseudoResmodDim2$vertical_stepsRes)
+jarque_bera_test_Rcpp_Naive(pseudoResmodDim2$vertical_stepsRes)
+jarque_bera_test_Rcpp_optimized(pseudoResmodDim2$vertical_stepsRes)
+bench_vector <- c(50, 100, 500, 1000, 2500, 10000, 15000, 30000, 50000, 75000, 100000)
 
-microbenchmark::microbenchmark(tseries::jarque.bera.test(pseudoResmodDim2$vertical_stepsRes),
-                               jarque_bera_test_Rcpp(pseudoResmodDim2$vertical_stepsRes),
-                               times = 100)
+# Create a data frame to store the results
+results_df <- data.frame(
+  length = integer(),
+  function1_time = double(),
+  function2_time = double()
+)
+
+# Loop over the different input sizes and benchmark the functions
+for (length in bench_vector) {
+  x <- rnorm(length)
+  benchmark_results <- microbenchmark(
+    tseries::jarque.bera.test(x),
+    jarque_bera_test_Rcpp_optimized(x),
+    times = 250  # number of times to repeat each function call
+  )
+  median_times <- aggregate(time/100000000000 ~ expr, benchmark_results, median)
+  results_df <- rbind(
+    results_df,
+    data.frame(
+      length = length,
+      tseries = median_times$time[1],
+      Rcpp = median_times$time[2]
+    )
+  )
+}
+
+# Plot the results
+ggplot(results_df, aes(x = length)) +
+  geom_line(aes(y = tseries, color = "tseries"), linewidth = .95) +
+  geom_line(aes(y = Rcpp, color = "Rcpp"), linewidth = .95) +
+  scale_y_log10() + scale_x_log10() + 
+  xlab("Input vector length") +
+  ylab("Computation time (seconds)") +
+  ggtitle("Comparison of tseries- and Rcpp implementation") + 
+  scale_color_manual(values = proj_palette)
 
 # Simulate to find bias in fit
 M <- 100 # Number of simulations
 classificationCheck <- numeric(M)
+biashorizontal_stepsCheckList <- vector("list", M)
+biasvertical_stepsCheckList <- vector("list", M)
+set.seed(1)
+for (i in 1:M){
+BiasCheckSim <- simulate_HMM(T, delta, Gamma, dists = c("rweibull", "rnorm"),
+                             list(c(k, lambda), c(mu, sigma)))
 
-BiasCheckSim <- simulate_HMM(T, delta, Gamma, dists = c("rweibull", "rnorm"), list(c(k, lambda), c(mu, sigma)))
 Prep_dataBiasCheck <- momentuHMM::prepData(data = data.frame(horizontal_steps = BiasCheckSim$obs_mat[,1],
-                                                     vertical_steps = BiasCheckSim$obs_mat[,2]),
-                                   coordNames = NULL)
-
+                                           vertical_steps = BiasCheckSim$obs_mat[,2]),
+                                           coordNames = NULL
+                                           )
 modBiacCheck <- fitHMM(data = Prep_dataBiasCheck,
                   nbStates = N,
                   dist = list(horizontal_steps = "weibull",
@@ -266,11 +306,21 @@ modBiacCheck <- fitHMM(data = Prep_dataBiasCheck,
                               vertical_steps = c(mu0, sigma0))
 )
 
-DecodedStatesBiacCheck <- viterbi(m = modBiacCheck) #Most likely state-sequence - compare to true state sequence.
+DecodedStatesBiacCheck <- viterbi(m = modBiacCheck) 
 
+classificationCheck[i] <- mean(DecodedStatesBiacCheck == BiasCheckSim$s)
 
-classificationCheck[i] <- mean(DecodedStatesBiacCheck == BiasCheckSim$s) # Classification accuracy
+biashorizontal_stepsCheckList[[i]] <- modBiacCheck$mle$horizontal_steps -
+  matrix(c(k,lambda), ncol = N, byrow = TRUE)
 
-modBiacCheck$mle$horizontal_steps - matrix(c(k,lambda), ncol = N, byrow = TRUE)
+biasvertical_stepsCheckList[[i]] <- modBiacCheck$mle$vertical_steps -
+  matrix(c(mu,sigma), ncol = N, byrow = TRUE)
+}
 
-modBiacCheck$mle$vertical_steps - matrix(c(mu,sigma), ncol = N, byrow = TRUE)
+# Test om estimatorne er unbiased
+# Kombinationer af row og column fremgår i lapply sidste to argumenter
+tibble(x = unlist(lapply(biashorizontal_stepsCheckList, "[", 1, 1))) %>% ggplot(aes(x = x)) +
+  geom_density(fill = proj_palette[6], alpha = .85)
+
+tibble(x = classificationCheck) %>% ggplot(aes(x = x)) + 
+  geom_density(fill = proj_palette[6], alpha = .85)
