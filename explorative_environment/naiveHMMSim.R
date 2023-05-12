@@ -14,7 +14,7 @@ proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
 # Define the parameters of the HMM
 N <- 3
 delta <- c(0.33, 0.33, 0.33)
-Gamma <- matrix(c(0.8, 0.2, 0.2,
+Gamma <- matrix(c(0.8, 0.1, 0.1,
                   0.2, 0.6, 0.2,
                   0.2, 0.2, 0.6),
                 nrow = N, byrow = TRUE) # State transition matrix
@@ -43,30 +43,6 @@ split_and_stack <- function(x, ncol) {
 }
 
 Rcpp::sourceCpp("naiveSimRcpp.cpp")
-
-
-benchData <- rnorm(100000)
-
-bench1 <- microbenchmark(split_and_stack(benchData, 2),
-                         split_and_stack_rcpp(benchData, 2),
-                         split_and_stack(benchData, 4),
-                         split_and_stack_rcpp(benchData, 4),
-                         split_and_stack(benchData, 8),
-                         split_and_stack_rcpp(benchData, 8),
-                         split_and_stack(benchData, 10),
-                         split_and_stack_rcpp(benchData, 10),
-                         split_and_stack(benchData, 16),
-                         split_and_stack_rcpp(benchData, 16),
-                         times = 100L) %>% as_tibble() %>%
-                         mutate(time = time/100000000000)
-bench1 <- bench1 %>% mutate(Language = factor(ifelse(str_detect(expr, "rcpp"), "Rcpp", "R")),
-                             paramNum = as.integer(str_extract(expr, "\\d+")))
-
-bench1 %>% ggplot(aes(x = factor(paramNum), y = log(time), fill = Language)) + geom_boxplot() +
-  scale_fill_manual(values = proj_palette)
-
-
-
 
 simulate_HMM <- function(T = 500,
                          delta,
@@ -119,7 +95,9 @@ simulate_HMM <- function(T = 500,
   return(list(s = s, obs_mat = obs_mat))
 }
 
-simRes <- simulate_HMM(T, delta, Gamma, dists = c("rweibull", "rnorm"), list(c(k, lambda), c(mu, sigma)))
+simRes <- simulate_HMM(T, delta, Gamma,
+                       dists = c("rweibull", "rnorm"),
+                       list(c(k, lambda), c(mu, sigma)))
 
 # Fit model
 # Init values for mean and variance of gamma and normal
@@ -140,7 +118,6 @@ modDim1 <- fitHMM(data = Prep_data1,
               Par0 = list(vertical_steps = c(mu0, sigma0))
 )
 plot(modDim1)
-
 
 DecodedStates1 <- viterbi(m = modDim1) #Most likely state-sequence - compare to true state sequence.
 mean(DecodedStates1 == simRes$s) # Classification accuracy
@@ -183,31 +160,31 @@ modDim2$CIreal # Estimates and confidence intervals of the above
 
 modDim2$mod # mod estimates, gradient, hessian, numIter, min of neg loglik
 # time to conv. etc.
-
-# play with the objects
-# plot confidence intervals for estimates
-verticalStepsmat <- cbind(modDim2$CIreal$vertical_steps$est,
-                          modDim2$CIreal$vertical_steps$lower,
-                          modDim2$CIreal$vertical_steps$upper)
-
-colnames(verticalStepsmat) <- c("estState1", "estState2", "estState3",
-                                "lowerState1", "lowerState2", "lowerState3",
-                                "upperState1", "upperState2", "upperState3")
-
-verticalSteps <- as_tibble(verticalStepsmat, rownames = "Parameter") %>%
-  pivot_longer(cols = -Parameter, names_to = "Info",values_to = "Value") %>%
-  mutate(State = factor(str_sub(Info, start = -1L, end = -1L)), Parameter = factor(Parameter),
-         Type = factor(case_when(str_detect(Info,"estState") ~ "Estimate",
-                          str_detect(Info,"lowerState") ~ "Lower",
-                          str_detect(Info,"upperState")  ~ "Upper"
-                          ))) %>% select(Parameter, Type, State, Value) %>%
-  pivot_wider(names_from = "Type", values_from = "Value") %>%
-  mutate(trueParam = c(mu, sigma))
-
-verticalSteps %>% ggplot(aes(x = State, y = Estimate)) +
-  geom_point() + geom_errorbar(aes(ymin = Lower, ymax = Upper)) +
-  facet_wrap(~Parameter, scale = "free") +
-  geom_point(aes(x = State, y = trueParam), col = "firebrick")
+# 
+# # play with the objects
+# # plot confidence intervals for estimates
+# verticalStepsmat <- cbind(modDim2$CIreal$vertical_steps$est,
+#                           modDim2$CIreal$vertical_steps$lower,
+#                           modDim2$CIreal$vertical_steps$upper)
+# 
+# colnames(verticalStepsmat) <- c("estState1", "estState2", "estState3",
+#                                 "lowerState1", "lowerState2", "lowerState3",
+#                                 "upperState1", "upperState2", "upperState3")
+# 
+# verticalSteps <- as_tibble(verticalStepsmat, rownames = "Parameter") %>%
+#   pivot_longer(cols = -Parameter, names_to = "Info",values_to = "Value") %>%
+#   mutate(State = factor(str_sub(Info, start = -1L, end = -1L)), Parameter = factor(Parameter),
+#          Type = factor(case_when(str_detect(Info,"estState") ~ "Estimate",
+#                           str_detect(Info,"lowerState") ~ "Lower",
+#                           str_detect(Info,"upperState")  ~ "Upper"
+#                           ))) %>% select(Parameter, Type, State, Value) %>%
+#   pivot_wider(names_from = "Type", values_from = "Value") %>%
+#   mutate(trueParam = c(mu, sigma))
+# 
+# verticalSteps %>% ggplot(aes(x = State, y = Estimate)) +
+#   geom_point() + geom_errorbar(aes(ymin = Lower, ymax = Upper)) +
+#   facet_wrap(~Parameter, scale = "free") +
+#   geom_point(aes(x = State, y = trueParam), col = "firebrick")
 
 # All very good let's access fit
 pseudoResmodDim2 <- momentuHMM::pseudoRes(modDim2)
@@ -224,7 +201,7 @@ pseudoResTibble %>% ggplot(aes(x = time, y = horizontal_stepsRes)) +
 # Histogram of residuals with standard normal distribution on top
 pseudoResTibble %>% ggplot(aes(x = vertical_stepsRes)) +
   geom_histogram(aes(y = after_stat(density)),col = "black", fill = proj_palette[6], alpha = 0.8) + 
-  stat_function(fun = dnorm, args = list(mean = 0, sd = 1), color = proj_palette[5], size = 1)
+  stat_function(fun = dnorm, args = list(mean = 0, sd = 1), color = proj_palette[5], linewidth = 1)
 
 # QQ-plot of residuals
 pseudoResTibble %>% ggplot(aes(sample = horizontal_stepsRes)) + 
@@ -285,12 +262,24 @@ ggplot(results_df, aes(x = length)) +
   scale_color_manual(values = proj_palette)
 
 # Simulate to find bias in fit
-M <- 100 # Number of simulations
+M <- 50 # Number of simulations
+
+# Classification
 classificationCheck <- numeric(M)
+
+# Bias in estimation
 biashorizontal_stepsCheckList <- vector("list", M)
 biasvertical_stepsCheckList <- vector("list", M)
+biasGammaCheckList <- vector("list", M)
+
+# Confidence intervals
+CIhorizontal_stepsCheckList <- vector("list", M)
+CIvertical_stepsCheckList <- vector("list", M)
+CIGammaCheckList <- vector("list", M)
+# Set seed for reproducability
 set.seed(1)
 for (i in 1:M){
+print(paste("Simulating state: ", i))
 BiasCheckSim <- simulate_HMM(T, delta, Gamma, dists = c("rweibull", "rnorm"),
                              list(c(k, lambda), c(mu, sigma)))
 
@@ -298,7 +287,7 @@ Prep_dataBiasCheck <- momentuHMM::prepData(data = data.frame(horizontal_steps = 
                                            vertical_steps = BiasCheckSim$obs_mat[,2]),
                                            coordNames = NULL
                                            )
-modBiacCheck <- fitHMM(data = Prep_dataBiasCheck,
+modBiasCheck <- fitHMM(data = Prep_dataBiasCheck,
                   nbStates = N,
                   dist = list(horizontal_steps = "weibull",
                               vertical_steps = "norm"),
@@ -306,21 +295,88 @@ modBiacCheck <- fitHMM(data = Prep_dataBiasCheck,
                               vertical_steps = c(mu0, sigma0))
 )
 
-DecodedStatesBiacCheck <- viterbi(m = modBiacCheck) 
+# Classification
+DecodedStatesBiasCheck <- viterbi(m = modBiasCheck) 
 
-classificationCheck[i] <- mean(DecodedStatesBiacCheck == BiasCheckSim$s)
+classificationCheck[i] <- mean(DecodedStatesBiasCheck == BiasCheckSim$s)
 
-biashorizontal_stepsCheckList[[i]] <- modBiacCheck$mle$horizontal_steps -
+# Bias in estimation
+biashorizontal_stepsCheckList[[i]] <- modBiasCheck$mle$horizontal_steps -
   matrix(c(k,lambda), ncol = N, byrow = TRUE)
 
-biasvertical_stepsCheckList[[i]] <- modBiacCheck$mle$vertical_steps -
+biasvertical_stepsCheckList[[i]] <- modBiasCheck$mle$vertical_steps -
   matrix(c(mu,sigma), ncol = N, byrow = TRUE)
+
+biasGammaCheckList[[i]] <- modBiasCheck$mle$gamma-Gamma
+
+# Confidence intervals
+# Parameters for observed states:
+CIGammaCheckList
+CIhorizontal_stepsCheckList[[i]] <- (modBiasCheck$CIreal$horizontal_steps$lower <
+                                     matrix(c(k,lambda), ncol = N, byrow = TRUE) &
+                                     matrix(c(k,lambda), ncol = N, byrow = TRUE) <
+                                       modBiasCheck$CIreal$horizontal_steps$upper)
+
+CIvertical_stepsCheckList[[i]] <- (modBiasCheck$CIreal$vertical_steps$lower <
+                                   matrix(c(k,lambda), ncol = N, byrow = TRUE) &
+                                   matrix(c(mu,sigma), ncol = N, byrow = TRUE) <
+                                   modBiasCheck$CIreal$vertical_steps$upper)
+
+CIGammaCheckList[[i]] <- (modBiasCheck$CIreal$gamma$lower < 
+                            Gamma & 
+                            Gamma <
+                            modBiasCheck$CIreal$gamma$upper)
 }
 
-# Test om estimatorne er unbiased
-# Kombinationer af row og column fremgår i lapply sidste to argumenter
+# Plot results
+# Classification accuracy
+tibble(x = classificationCheck) %>% ggplot(aes(x = x)) + 
+  geom_density(fill = proj_palette[6], alpha = .85)
+
+# Bias in estimates
+# Combinations of row and col are the two last arguments of lapply
 tibble(x = unlist(lapply(biashorizontal_stepsCheckList, "[", 1, 1))) %>% ggplot(aes(x = x)) +
   geom_density(fill = proj_palette[6], alpha = .85)
 
-tibble(x = classificationCheck) %>% ggplot(aes(x = x)) + 
-  geom_density(fill = proj_palette[6], alpha = .85)
+# Bias of transistion probability matrix
+tibble(p11 = unlist(lapply(biasGammaCheckList, "[", 1, 1)),
+       p12 = unlist(lapply(biasGammaCheckList, "[", 1, 2)),
+       p13 = unlist(lapply(biasGammaCheckList, "[", 1, 3)),
+       p21 = unlist(lapply(biasGammaCheckList, "[", 2, 1)),
+       p22 = unlist(lapply(biasGammaCheckList, "[", 2, 2)),
+       p23 = unlist(lapply(biasGammaCheckList, "[", 2, 3)),
+       p31 = unlist(lapply(biasGammaCheckList, "[", 3, 1)),
+       p32 = unlist(lapply(biasGammaCheckList, "[", 3, 2)),
+       p33 = unlist(lapply(biasGammaCheckList, "[", 3, 3))) %>% 
+  pivot_longer(cols = everything(), names_to = "Transition", values_to = "Estimate") %>% 
+  ggplot(aes(x = Estimate)) + geom_density(fill = proj_palette[5]) + 
+  facet_wrap(~Transition, scale = "free")
+
+# Confidence intervals
+# k and lambda
+sum(unlist(lapply(CIhorizontal_stepsCheckList, "[", 1, 1))/M)
+sum(unlist(lapply(CIhorizontal_stepsCheckList, "[", 1, 2))/M)
+sum(unlist(lapply(CIhorizontal_stepsCheckList, "[", 1, 3))/M)
+sum(unlist(lapply(CIhorizontal_stepsCheckList, "[", 2, 1))/M)
+sum(unlist(lapply(CIhorizontal_stepsCheckList, "[", 2, 2))/M)
+sum(unlist(lapply(CIhorizontal_stepsCheckList, "[", 2, 3))/M)
+
+# mu and sigma
+sum(unlist(lapply(CIvertical_stepsCheckList, "[", 1, 1))/M)
+sum(unlist(lapply(CIvertical_stepsCheckList, "[", 1, 2))/M)
+sum(unlist(lapply(CIvertical_stepsCheckList, "[", 1, 3))/M)
+sum(unlist(lapply(CIvertical_stepsCheckList, "[", 2, 1))/M)
+sum(unlist(lapply(CIvertical_stepsCheckList, "[", 2, 2))/M)
+sum(unlist(lapply(CIvertical_stepsCheckList, "[", 2, 3))/M)
+
+# Gamma
+sum(unlist(lapply(CIGammaCheckList, "[", 1, 1))/M)
+sum(unlist(lapply(CIGammaCheckList, "[", 1, 2))/M)
+sum(unlist(lapply(CIGammaCheckList, "[", 1, 3))/M)
+sum(unlist(lapply(CIGammaCheckList, "[", 2, 1))/M)
+sum(unlist(lapply(CIGammaCheckList, "[", 2, 2))/M)
+sum(unlist(lapply(CIGammaCheckList, "[", 2, 3))/M)
+sum(unlist(lapply(CIGammaCheckList, "[", 3, 1))/M)
+sum(unlist(lapply(CIGammaCheckList, "[", 3, 2))/M)
+sum(unlist(lapply(CIGammaCheckList, "[", 3, 3))/M)
+
