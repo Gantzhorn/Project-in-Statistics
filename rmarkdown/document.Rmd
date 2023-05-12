@@ -10,6 +10,9 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(momentuHMM)
 theme_set(theme_bw())
+proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
+                         "#F0E442", "#0072B2", "#D55E00",
+                         "#CC79A7")
 ```
 
 # Test
@@ -25,6 +28,9 @@ eagleData <- eagleData %>% group_by(Segment_ID) %>%
     rename(horizontal_steps = Step_length) %>% 
     slice(2:n())
 ```
+
+# We need to try to identify three distinct states.
+
 
 
 # Estimation using Weibull- and Gamma distributions
@@ -93,7 +99,14 @@ prepEagleData <- momentuHMM::prepData(data = data.frame(ID = eagleData$Segment_I
                                        horizontal_steps = eagleData$horizontal_steps),
                                        coordNames = NULL)
 ```
-# We fit the model using the parameters from above and decode the states
+We also need the number of observations per animal for the validation process later.
+```{r}
+obsPerAnimal <- as.list(as.numeric(table(prepEagleData$ID))) 
+```
+
+# Model fitting
+
+We fit the model using the parameters from above and decode the states
 ```{r}
 N <- 3 
 # Initial values for weibull distributions of horizontal distances
@@ -115,13 +128,34 @@ decodedStatesFit1 <- viterbi(m = eagleFit1)
 
 ```
 
+Add decoded states to the dataset
 ```{r}
 eagleData <- tibble(eagleData, decodedstates = decodedStatesFit1)
 ```
-
+And plot the results
 ```{r}
 eagleData <- eagleData %>% mutate(decodedstates = factor(decodedstates))
 
-ggplot(filter(eagleData), aes(x = vertical_steps, y = log(horizontal_steps), col = decodedstates)) + geom_point()
+ggplot(eagleData, aes(x = log(horizontal_steps), y = vertical_steps)) + geom_point(alpha = .6) + facet_wrap(~decodedstates,ncol = 1)
 ```
+
+# Assess the fitted model
+Look at simulations from the model and whether they show similar patterns as the observed data.
+
+```{r}
+eagleSim <- momentuHMM::simData(nbAnimals = max(as.numeric(levels(prepEagleData$ID))),
+                                nbStates = N,
+                                model = eagleFit1,
+                                obsPerAnimal = obsPerAnimal)
+eagleSim
+```
+```{r}
+bind_rows(eagleSim, prepEagleData) %>%
+    mutate(Data = rep(c("Sim", "Obs"), each = nrow(eagleSim))) %>%
+  pivot_longer(cols = -c(ID, Data), names_to = "Movement_type", values_to = "Move") %>% 
+  ggplot(aes(x = Move, fill = Data)) + geom_density() +
+  scale_fill_manual(values = proj_palette) + facet_wrap(~Movement_type, ncol = 1, scale = "free")
+```
+
+
 
