@@ -69,8 +69,8 @@ simulate_HMM <- function(T = 500,
 
   # X-coordinate
   dist1 <- match.fun(dists[1])
-  if(fastSampler){params_dist1 <- split_and_stack(params[[1]], ncol = N)}
-  else {params_dist1 <- split_and_stack_rcpp(params[[1]], ncol = N)}
+  if(fastSampler){params_dist1 <- split_and_stack_rcpp(params[[1]], ncol = N)}
+  else {params_dist1 <- split_and_stack(params[[1]], ncol = N)}
   if (nrow(params_dist1) == 1){
     obs_mat[, 1] <- dist1(n = T, params_dist1[1, s])
   }
@@ -81,8 +81,8 @@ simulate_HMM <- function(T = 500,
 
   # Y-coordinate
   dist2 <- match.fun(dists[2])
-  if(fastSampler){params_dist2 <- split_and_stack(params[[2]], ncol = N)}
-  else {params_dist2 <- split_and_stack_rcpp(params[[2]], ncol = N)}
+  if(fastSampler){params_dist2 <- split_and_stack_rcpp(params[[2]], ncol = N)}
+  else {params_dist2 <- split_and_stack(params[[2]], ncol = N)}
   if (nrow(params_dist2) == 1){
     obs_mat[,2] <- dist2(n = T, params_dist2[1, s])
   }
