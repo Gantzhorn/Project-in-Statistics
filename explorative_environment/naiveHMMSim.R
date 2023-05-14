@@ -15,8 +15,8 @@ proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
 N <- 3
 delta <- c(0.33, 0.33, 0.33)
 Gamma <- matrix(c(0.8, 0.1, 0.1,
-                  0.2, 0.6, 0.2,
-                  0.2, 0.2, 0.6),
+                  0.1, 0.8, 0.1,
+                  0.1, 0.1, 0.8),
                 nrow = N, byrow = TRUE) # State transition matrix
 
 # Number of time-steps
@@ -58,11 +58,17 @@ simulate_HMM <- function(T = 500,
   s <- rep(0, T)
   if(fastSampler){
     s[1] <- sample.int(N, size = 1, prob = delta)
-    s[2:T] <- sample.int(N, size = T-1, prob = Gamma[s[1:T-1],], replace=TRUE)
+    for (i in 2:T){
+      s[i] <- sample.int(N, size = 1, prob = Gamma[s[(i-1)],])
+    }
+    #s[2:T] <- sample.int(N, size = T-1, prob = Gamma[s[1:T-1],], replace=TRUE)
   }
   else{
   s[1] <- sample(1:N, size = 1, prob = delta)
-  s[2:T] <- sample(1:N, size = T-1, prob = Gamma[s[1:T-1],], replace=TRUE)
+  for (i in 2:T){
+    s[i] <- sample(1:N, size = 1, prob = Gamma[s[(i-1)],])
+  }
+  #s[2:T] <- sample(1:N, size = T-1, prob = Gamma[s[1:T-1],], replace=TRUE)
   }
   # Simulate the observations
   obs_mat <- matrix(nrow = T, ncol = 2)
