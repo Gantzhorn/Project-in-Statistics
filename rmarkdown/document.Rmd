@@ -127,6 +127,56 @@ eagleFit1 <- momentuHMM::fitHMM(prepEagleData,
 decodedStatesFit1 <- viterbi(m = eagleFit1)
 
 ```
+Use the generic plot method on the model
+```{r}
+plot(eagleFit1)
+```
+
+```{r}
+eagleFit1$mle$horizontal_steps
+eagleFit1$mle$vertical_steps
+numberAfterState <- decodedStatesFit1 %>% tibble(stateNum=.) %>% group_by(stateNum) %>% count() %>% ungroup() %>% mutate(prop = n/sum(n))
+```
+
+```{r}
+eagleFit1$mle$horizontal_steps
+
+# Set the parameters for the Weibull distributions
+shape_params <- eagleFit1$mle$horizontal_steps[1,]
+scale_params <- eagleFit1$mle$horizontal_steps[2,]
+
+# Set the number of observations for each distribution
+num_observations <- c(numberAfterState$n[numberAfterState$stateNum == 1], 
+                      numberAfterState$n[numberAfterState$stateNum == 2], 
+                      numberAfterState$n[numberAfterState$stateNum == 3])
+
+# Generate the x values
+x <- density(eagleData$horizontal_steps)$x
+
+# Calculate the density values for each distribution
+pdf_values <- sapply(1:N, function(i) {
+  density <- dweibull(x, shape = shape_params[i], scale = scale_params[i])
+  density <- density * numberAfterState$prop[numberAfterState$stateNum == i]
+  density
+})
+
+# Create a data frame for the density values
+df <- data.frame(x = rep(x, N),
+                 density = as.vector(pdf_values),
+                 state = factor(rep(1:N, each = length(x))))
+
+# Plot the density functions using ggplot2
+ggplot(eagleData, aes(x = horizontal_steps)) +
+  geom_histogram(aes(y = ..density..),col = "black", fill = "gray",alpha = .6)
+
+ggplot(eagleData) +
+  geom_histogram(aes(x = horizontal_steps, after_stat(density)), fill = "gray", col = "black") +
+  geom_density(data = df, aes(x = x, y = density, color = state),
+               stat = "identity", lwd = 1, alpha = 1.5) +
+  xlab("x") +
+  ylab("Density") +
+  scale_color_manual(values = proj_palette)
+```
 
 Add decoded states to the dataset
 ```{r}
@@ -149,6 +199,7 @@ eagleSim <- momentuHMM::simData(nbAnimals = max(as.numeric(levels(prepEagleData$
                                 obsPerAnimal = obsPerAnimal)
 eagleSim
 ```
+
 ```{r}
 bind_rows(eagleSim, prepEagleData) %>%
     mutate(Data = rep(c("Sim", "Obs"), each = nrow(eagleSim))) %>%
@@ -156,6 +207,45 @@ bind_rows(eagleSim, prepEagleData) %>%
   ggplot(aes(x = Move, fill = Data)) + geom_density() +
   scale_fill_manual(values = proj_palette) + facet_wrap(~Movement_type, ncol = 1, scale = "free")
 ```
+# Assess fit
 
+```{r}
+pseudoReseagleFit1 <- momentuHMM::pseudoRes(eagleFit1)
+pseudoResTibble <- tibble(horizontal_stepsRes = pseudoReseagleFit1[[1]],
+                          vertical_stepsRes = pseudoReseagleFit1[[2]]
+                          ) %>% mutate(time = row_number())
+```
 
+```{r}
+# Chain independence:
+pseudoResTibble %>% ggplot(aes(x = time, y = horizontal_stepsRes)) +
+  geom_line(color = proj_palette[5])
+```
+
+```{r}
+# Histogram of residuals with standard normal distribution on top
+pseudoResTibble %>% ggplot(aes(x = vertical_stepsRes)) +
+  geom_histogram(aes(y = after_stat(density)),col = "black", fill = proj_palette[6], alpha = 0.8) + 
+  stat_function(fun = dnorm, args = list(mean = 0, sd = 1), color = proj_palette[5], linewidth = 1)
+```
+
+```{r}
+# QQ-plot of residuals
+pseudoResTibble %>% ggplot(aes(sample = horizontal_stepsRes)) + 
+  geom_qq() +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  labs(title = "QQ Plot of Horizontal Steps Pseudo Residuals")
+```
+
+```{r}
+# Make autocorrelation plots
+acf_vals <- acf(pseudoResTibble$horizontal_stepsRes, plot = FALSE)
+acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
+ggplot(acftib, aes(x = lag, y = ACF)) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed", color = proj_palette[3]) +
+  geom_segment(aes(xend = lag, yend = 0), color = "black") +
+  xlab("Lag") +
+  ylab("Autocorrelation")
+```
 
