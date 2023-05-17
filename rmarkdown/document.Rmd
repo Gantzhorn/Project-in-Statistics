@@ -9,6 +9,10 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(momentuHMM)
+library(maps)
+library(mapdata)
+library(mapview)
+library(ggthemes)
 theme_set(theme_bw())
 proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
                          "#F0E442", "#0072B2", "#D55E00",
@@ -20,7 +24,28 @@ proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
 Check if everything works
 
 ```{r, include=FALSE}
-eagleDataOriginal <- readr::read_csv("GoldenEagle_FinalData_Dryad_FE.csv")
+eagleDataOriginal <- readr::read_csv("Eagle_data_with_GPS_positions.csv")
+# Calculate the range of latitude and longitude
+lat_range <- range(eagleDataOriginal$Latitude) + c(-7.5, 7.5)
+lon_range <- range(eagleDataOriginal$Longitude) + c(-7.5, 7.5)
+
+# Get map data for the specified range
+map_data <- map_data("world") %>%
+  filter((long > lon_range[1]& long < lon_range[2]) &
+           (lat > lat_range[1]& lat < lat_range[2]))
+
+# Plot longitude and latitude on a map
+ggplot() +
+  geom_polygon(data = map_data, aes(x = long, y = lat, group = group), fill = "lightgray", color = "gray50") +
+  geom_point(data = eagleDataOriginal, aes(x = Longitude, y = Latitude),
+             color = proj_palette[1], size = .3) +
+  xlab("Longitude") +
+  ylab("Latitude") +
+  ggtitle("Longitude and Latitude on World Map") +
+  theme_map() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
 eagleData <- eagleDataOriginal
 eagleData %>% mutate(Segment_ID = factor(Segment_ID))
 eagleData <- eagleData %>% group_by(Segment_ID) %>%
@@ -30,8 +55,6 @@ eagleData <- eagleData %>% group_by(Segment_ID) %>%
 ```
 
 # We need to try to identify three distinct states.
-
-
 
 # Estimation using Weibull- and Gamma distributions
 First assume that Step_length is Weibull distributed. The MLE of $k$ is the solution to
@@ -133,14 +156,10 @@ plot(eagleFit1)
 ```
 
 ```{r}
-eagleFit1$mle$horizontal_steps
-eagleFit1$mle$vertical_steps
 numberAfterState <- decodedStatesFit1 %>% tibble(stateNum=.) %>% group_by(stateNum) %>% count() %>% ungroup() %>% mutate(prop = n/sum(n))
 ```
 
 ```{r}
-eagleFit1$mle$horizontal_steps
-
 # Set the parameters for the Weibull distributions
 shape_params <- eagleFit1$mle$horizontal_steps[1,]
 scale_params <- eagleFit1$mle$horizontal_steps[2,]
@@ -160,22 +179,24 @@ pdf_values <- sapply(1:N, function(i) {
   density
 })
 
+
+
 # Create a data frame for the density values
-df <- data.frame(x = rep(x, N),
-                 density = as.vector(pdf_values),
-                 state = factor(rep(1:N, each = length(x))))
+df <- data.frame(x = rep(x, (N+1)),
+                 density = as.vector(cbind(pdf_values, rowSums(pdf_values))),
+                 state = factor(rep(c(1:N, "Total"), each = length(x))))
 
 # Plot the density functions using ggplot2
-ggplot(eagleData, aes(x = horizontal_steps)) +
-  geom_histogram(aes(y = ..density..),col = "black", fill = "gray",alpha = .6)
-
-ggplot(eagleData) +
-  geom_histogram(aes(x = horizontal_steps, after_stat(density)), fill = "gray", col = "black") +
-  geom_density(data = df, aes(x = x, y = density, color = state),
+# Plot the density functions using ggplot2
+ggplot() + 
+  geom_histogram(data = eagleData, aes(x = horizontal_steps, after_stat(density)), fill = "gray", col = "black") +
+  geom_density(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
                stat = "identity", lwd = 1, alpha = 1.5) +
   xlab("x") +
   ylab("Density") +
   scale_color_manual(values = proj_palette)
+
+
 ```
 
 Add decoded states to the dataset
@@ -239,7 +260,7 @@ pseudoResTibble %>% ggplot(aes(sample = horizontal_stepsRes)) +
 
 ```{r}
 # Make autocorrelation plots
-acf_vals <- acf(pseudoResTibble$horizontal_stepsRes, plot = FALSE)
+acf_vals <- acf(pseudoResTibble$vertical_stepsRes[is.finite(pseudoResTibble$vertical_stepsRes)], plot = FALSE)
 acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
 ggplot(acftib, aes(x = lag, y = ACF)) +
   geom_hline(yintercept = 0, color = "black") +
@@ -248,4 +269,19 @@ ggplot(acftib, aes(x = lag, y = ACF)) +
   xlab("Lag") +
   ylab("Autocorrelation")
 ```
+
+```{r}
+# Find segment with the most observations:
+favourite_bird <- eagleData %>% group_by(Segment_ID) %>% summarise(n = n()) %>% ungroup() %>% 
+  slice_max(n) %>% .$Segment_ID
+
+# Find interesting birds:
+eagleData %>% group_by(Segment_ID, decodedstates) %>% summarise(n = n()) %>% ungroup() %>% group_by(Segment_ID) %>% mutate(prop = n/sum(n)) %>% select(Segment_ID, decodedstates, prop) %>%  pivot_wider(names_from = "decodedstates", values_from = "prop") %>%
+  mutate(across(where(is.double), ~ replace_na(., 0))) %>% filter(`1`>0.25 & `2`>0.25 & `3`>0.25)
+
+
+favourite_birdTibble <- eagleData %>% filter(Segment_ID == 499)
+mapview::mapview(favourite_birdTibble, xcol = "Longitude", ycol = "Latitude", crs = 4269, grid = FALSE, zcol = "decodedstates")
+```
+
 
