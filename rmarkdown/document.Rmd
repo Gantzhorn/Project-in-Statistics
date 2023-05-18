@@ -5,12 +5,13 @@ date: "2023-04-29"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, warning = FALSE, message = FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(momentuHMM)
 library(maps)
 library(mapdata)
+library(ggmap)
 library(mapview)
 library(ggthemes)
 theme_set(theme_bw())
@@ -23,7 +24,7 @@ proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
 
 Check if everything works
 
-```{r, include=FALSE}
+```{r, include=FALSE, message = FALSE}
 eagleDataOriginal <- readr::read_csv("Eagle_data_with_GPS_positions.csv")
 # Calculate the range of latitude and longitude
 lat_range <- range(eagleDataOriginal$Latitude) + c(-7.5, 7.5)
@@ -67,7 +68,7 @@ $$
 \hat{\lambda} = \left(\frac{1}{N} \sum_{i = 1}^N X_i^k\right)^{\frac{1}{k}}
 $$
 Thus we can calculate the MLE assuming step-length has a Weibull distribtion
-```{r}
+```{r message = FALSE}
 k_hat <- uniroot(function(k) {sum(eagleData$horizontal_steps^k * log(eagleData$horizontal_steps)) / sum(eagleData$horizontal_steps^k) - 1/k - mean(log(eagleData$horizontal_steps))},
                     c(0.1, 10))$root
 lambda_hat <- (mean(eagleData$horizontal_steps^k_hat))^(1/k_hat)
@@ -75,7 +76,7 @@ lambda_hat <- (mean(eagleData$horizontal_steps^k_hat))^(1/k_hat)
 
 We can simulate from this distribution and compare with the data
 
-```{r}
+```{r message = FALSE}
 simWei <- rweibull(50000, shape = k_hat, scale = lambda_hat)
 
 tibble(x = c(simWei, eagleData$horizontal_steps), type = rep(c("sim", "obs"), times = c(length(simWei), length(eagleData$horizontal_steps)))) %>% ggplot(aes(x = x, color = type)) + geom_density()
@@ -109,28 +110,28 @@ $$
 \hat{\mu} = \frac{1}{N}\sum_{i = 1}^N \left(X_i-\hat{\mu}\right)^2
 $$
 Which we implement.
-```{r}
+```{r message = FALSE}
 mu_hat <- mean(eagleData$vertical_steps)
 sigmasq_hat <- var(eagleData$vertical_steps)
 
 ```
 
 
-```{r}
+```{r message = FALSE}
 prepEagleData <- momentuHMM::prepData(data = data.frame(ID = eagleData$Segment_ID,
                                        vertical_steps = eagleData$vertical_steps,
                                        horizontal_steps = eagleData$horizontal_steps),
                                        coordNames = NULL)
 ```
 We also need the number of observations per animal for the validation process later.
-```{r}
+```{r message = FALSE}
 obsPerAnimal <- as.list(as.numeric(table(prepEagleData$ID))) 
 ```
 
 # Model fitting
 
 We fit the model using the parameters from above and decode the states
-```{r}
+```{r message = FALSE}
 N <- 3 
 # Initial values for weibull distributions of horizontal distances
 k0 <- rep(k_hat, times = N)
@@ -151,15 +152,15 @@ decodedStatesFit1 <- viterbi(m = eagleFit1)
 
 ```
 Use the generic plot method on the model
-```{r}
-plot(eagleFit1)
+```{r message = FALSE}
+#plot(eagleFit1)
 ```
 
-```{r}
+```{r message = FALSE}
 numberAfterState <- decodedStatesFit1 %>% tibble(stateNum=.) %>% group_by(stateNum) %>% count() %>% ungroup() %>% mutate(prop = n/sum(n))
 ```
 
-```{r}
+```{r message = FALSE}
 # Set the parameters for the Weibull distributions
 shape_params <- eagleFit1$mle$horizontal_steps[1,]
 scale_params <- eagleFit1$mle$horizontal_steps[2,]
@@ -200,11 +201,11 @@ ggplot() +
 ```
 
 Add decoded states to the dataset
-```{r}
+```{r message = FALSE}
 eagleData <- tibble(eagleData, decodedstates = decodedStatesFit1)
 ```
 And plot the results
-```{r}
+```{r message = FALSE}
 eagleData <- eagleData %>% mutate(decodedstates = factor(decodedstates))
 
 ggplot(eagleData, aes(x = log(horizontal_steps), y = vertical_steps)) + geom_point(alpha = .6) + facet_wrap(~decodedstates,ncol = 1)
@@ -213,7 +214,7 @@ ggplot(eagleData, aes(x = log(horizontal_steps), y = vertical_steps)) + geom_poi
 # Assess the fitted model
 Look at simulations from the model and whether they show similar patterns as the observed data.
 
-```{r}
+```{r message = FALSE, include = FALSE}
 eagleSim <- momentuHMM::simData(nbAnimals = max(as.numeric(levels(prepEagleData$ID))),
                                 nbStates = N,
                                 model = eagleFit1,
@@ -221,7 +222,7 @@ eagleSim <- momentuHMM::simData(nbAnimals = max(as.numeric(levels(prepEagleData$
 eagleSim
 ```
 
-```{r}
+```{r message = FALSE}
 bind_rows(eagleSim, prepEagleData) %>%
     mutate(Data = rep(c("Sim", "Obs"), each = nrow(eagleSim))) %>%
   pivot_longer(cols = -c(ID, Data), names_to = "Movement_type", values_to = "Move") %>% 
@@ -230,27 +231,27 @@ bind_rows(eagleSim, prepEagleData) %>%
 ```
 # Assess fit
 
-```{r}
+```{r message = FALSE}
 pseudoReseagleFit1 <- momentuHMM::pseudoRes(eagleFit1)
 pseudoResTibble <- tibble(horizontal_stepsRes = pseudoReseagleFit1[[1]],
                           vertical_stepsRes = pseudoReseagleFit1[[2]]
                           ) %>% mutate(time = row_number())
 ```
 
-```{r}
+```{r message = FALSE}
 # Chain independence:
 pseudoResTibble %>% ggplot(aes(x = time, y = horizontal_stepsRes)) +
   geom_line(color = proj_palette[5])
 ```
 
-```{r}
+```{r message = FALSE}
 # Histogram of residuals with standard normal distribution on top
 pseudoResTibble %>% ggplot(aes(x = vertical_stepsRes)) +
   geom_histogram(aes(y = after_stat(density)),col = "black", fill = proj_palette[6], alpha = 0.8) + 
   stat_function(fun = dnorm, args = list(mean = 0, sd = 1), color = proj_palette[5], linewidth = 1)
 ```
 
-```{r}
+```{r message = FALSE}
 # QQ-plot of residuals
 pseudoResTibble %>% ggplot(aes(sample = horizontal_stepsRes)) + 
   geom_qq() +
@@ -258,7 +259,7 @@ pseudoResTibble %>% ggplot(aes(sample = horizontal_stepsRes)) +
   labs(title = "QQ Plot of Horizontal Steps Pseudo Residuals")
 ```
 
-```{r}
+```{r message = FALSE}
 # Make autocorrelation plots
 acf_vals <- acf(pseudoResTibble$vertical_stepsRes[is.finite(pseudoResTibble$vertical_stepsRes)], plot = FALSE)
 acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
@@ -270,7 +271,7 @@ ggplot(acftib, aes(x = lag, y = ACF)) +
   ylab("Autocorrelation")
 ```
 
-```{r}
+```{r message = FALSE}
 # Find segment with the most observations:
 favourite_bird <- eagleData %>% group_by(Segment_ID) %>% summarise(n = n()) %>% ungroup() %>% 
   slice_max(n) %>% .$Segment_ID
@@ -280,8 +281,24 @@ eagleData %>% group_by(Segment_ID, decodedstates) %>% summarise(n = n()) %>% ung
   mutate(across(where(is.double), ~ replace_na(., 0))) %>% filter(`1`>0.25 & `2`>0.25 & `3`>0.25)
 
 
-favourite_birdTibble <- eagleData %>% filter(Segment_ID == 499)
-mapview::mapview(favourite_birdTibble, xcol = "Longitude", ycol = "Latitude", crs = 4269, grid = FALSE, zcol = "decodedstates")
+favourite_birdTibble <- eagleData %>% filter(Segment_ID == 48)
+#mapview::mapview(favourite_birdTibble, xcol = "Longitude", ycol = "Latitude", crs = 4269, grid = #FALSE, zcol = "decodedstates")
+```
+Try plotting with a different package
+```{r}
+favoriteBirdMap <- ggmap::get_stamenmap(bbox = c(left = min(favourite_birdTibble$Longitude),
+                              right = max(favourite_birdTibble$Longitude),
+                              bottom = min(favourite_birdTibble$Latitude),
+                              top = max(favourite_birdTibble$Latitude)),
+                              maptype = "terrain",
+                              crop = FALSE,
+                              zoom = 10)
+
+ggmap(favoriteBirdMap)+
+  geom_line(data = favourite_birdTibble, aes(x = Longitude, y = Latitude, group = Segment_ID),
+            lwd = 1, col = "black") + 
+  geom_point(data = favourite_birdTibble, aes(x = Longitude, y = Latitude, col = decodedstates)) +
+  scale_color_manual(values = proj_palette)
 ```
 
 
