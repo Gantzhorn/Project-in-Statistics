@@ -26,27 +26,6 @@ Check if everything works
 
 ```{r, include=FALSE, message = FALSE}
 eagleDataOriginal <- readr::read_csv("Eagle_data_with_GPS_positions.csv")
-# Calculate the range of latitude and longitude
-lat_range <- range(eagleDataOriginal$Latitude) + c(-7.5, 7.5)
-lon_range <- range(eagleDataOriginal$Longitude) + c(-7.5, 7.5)
-
-# Get map data for the specified range
-map_data <- map_data("world") %>%
-  filter((long > lon_range[1]& long < lon_range[2]) &
-           (lat > lat_range[1]& lat < lat_range[2]))
-
-# Plot longitude and latitude on a map
-ggplot() +
-  geom_polygon(data = map_data, aes(x = long, y = lat, group = group), fill = "lightgray", color = "gray50") +
-  geom_point(data = eagleDataOriginal, aes(x = Longitude, y = Latitude),
-             color = proj_palette[1], size = .3) +
-  xlab("Longitude") +
-  ylab("Latitude") +
-  ggtitle("Longitude and Latitude on World Map") +
-  theme_map() +
-  theme(plot.title = element_text(hjust = 0.5))
-
-
 eagleData <- eagleDataOriginal
 eagleData %>% mutate(Segment_ID = factor(Segment_ID))
 eagleData <- eagleData %>% group_by(Segment_ID) %>%
@@ -188,16 +167,15 @@ df <- data.frame(x = rep(x, (N+1)),
                  state = factor(rep(c(1:N, "Total"), each = length(x))))
 
 # Plot the density functions using ggplot2
-# Plot the density functions using ggplot2
 ggplot() + 
   geom_histogram(data = eagleData, aes(x = horizontal_steps, after_stat(density)), fill = "gray", col = "black") +
-  geom_density(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
-               stat = "identity", lwd = 1, alpha = 1.5) +
+  geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
+                lwd = 1, alpha = 1.5) +
+  geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
+                lwd = 1, alpha = 1.5, linetype = "dashed") +
   xlab("x") +
   ylab("Density") +
   scale_color_manual(values = proj_palette)
-
-
 ```
 
 Add decoded states to the dataset
@@ -272,7 +250,7 @@ ggplot(acftib, aes(x = lag, y = ACF)) +
 ```
 
 ```{r message = FALSE}
-# Find segment with the most observations:
+ # Find segment with the most observations:
 favourite_bird <- eagleData %>% group_by(Segment_ID) %>% summarise(n = n()) %>% ungroup() %>% 
   slice_max(n) %>% .$Segment_ID
 
@@ -282,7 +260,8 @@ eagleData %>% group_by(Segment_ID, decodedstates) %>% summarise(n = n()) %>% ung
 
 
 favourite_birdTibble <- eagleData %>% filter(Segment_ID == 48)
-#mapview::mapview(favourite_birdTibble, xcol = "Longitude", ycol = "Latitude", crs = 4269, grid = #FALSE, zcol = "decodedstates")
+mapview::mapview(favourite_birdTibble, xcol = "Longitude", ycol = "Latitude", crs = 4326,
+                 grid = FALSE, zcol = "decodedstates")
 ```
 Try plotting with a different package
 ```{r}
@@ -292,13 +271,43 @@ favoriteBirdMap <- ggmap::get_stamenmap(bbox = c(left = min(favourite_birdTibble
                               top = max(favourite_birdTibble$Latitude)),
                               maptype = "terrain",
                               crop = FALSE,
-                              zoom = 10)
+                              zoom = 11)
+allBirdsMap <- ggmap::get_stamenmap(bbox = c(left = min(eagleData$Longitude),
+                              right = -73,
+                              bottom = min(eagleData$Latitude),
+                              top = 43),
+                              maptype = "terrain-background",
+                              crop = FALSE,
+                              zoom = 8)
 
 ggmap(favoriteBirdMap)+
-  geom_line(data = favourite_birdTibble, aes(x = Longitude, y = Latitude, group = Segment_ID),
-            lwd = 1, col = "black") + 
+  geom_line(data = favourite_birdTibble, aes(x = Longitude, y = Latitude),
+            lwd = 0.1, col = "black") + 
   geom_point(data = favourite_birdTibble, aes(x = Longitude, y = Latitude, col = decodedstates)) +
-  scale_color_manual(values = proj_palette)
+  scale_color_manual(values = proj_palette) +
+  labs(title = "Segment 48 path",
+       x = "Longitude",
+       y = "Latitude") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 12),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10),
+        legend.position = "bottom")
 ```
 
+```{r}
+ggmap(allBirdsMap) +
+  geom_point(data = eagleData, aes(x = Longitude, y = Latitude, group = Segment_ID),
+            size = 0.0001, col = "black") + 
+  labs(title = "Most birds",
+       x = "Longitude",
+       y = "Latitude") +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 12),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10),
+        legend.position = "bottom")
+```
 
