@@ -98,7 +98,7 @@ simulate_HMM <- function(T = 500,
   return(list(s = s, obs_mat = obs_mat))
 }
 
-simRes <- simulate_HMM(5000, delta, Gamma,
+simRes <- simulate_HMM(500, delta, Gamma,
                        dists = c("rweibull", "rnorm"),
                        list(c(k, lambda), c(mu, sigma)))
 # Fit model
@@ -181,7 +181,7 @@ qqNormality <- purrr::map(names(pseudoResTibble)[1:(length(names(pseudoResTibble
            function(column_name) {
              ggplot(pseudoResTibble, aes(sample = .data[[column_name]])) +
                geom_qq() +
-               geom_abline(intercept = 0, slope = 1, color = proj_palette[3]) 
+               geom_abline(intercept = 0, slope = 1, color = proj_palette[3]) + xlab(as.character(column_name))
            })
 
 qqNormalityPlot <- do.call(grid.arrange, c(qqNormality, ncol = gridColsNum))
@@ -219,122 +219,156 @@ jarqueBeraTests <- function(pseudoResidual){
   }
   return(jarqueBeraVector)
 }
-# Simulate to find bias in fit
-M <- 100 # Number of simulations
 
+simStudyHMM <- function(numSim,
+                        observationsPerSim,
+                        delta,
+                        Gamma,
+                        simDistributions,
+                        simdistributionArguments,
+                        fitDistributions,
+                        fitDistributionArguments,
+                        seed = FALSE){
+# Make sure we know the number of states
+N <- length(delta)
+# Initiliaze vectors and lists to hold data
 # Classification
-classificationCheck <- numeric(M)
+classificationCheck <- numeric(numSim)
 
 # Bias in estimation
-biashorizontal_stepsCheckList <- vector("list", M)
-biasvertical_stepsCheckList <- vector("list", M)
-biasGammaCheckList <- vector("list", M)
+biashorizontal_stepsCheckList <- vector("list", numSim)
+biasvertical_stepsCheckList <- vector("list", numSim)
+biasGammaCheckList <- vector("list", numSim)
 
 # Confidence intervals
-CIhorizontal_stepsCheckList <- vector("list", M)
-CIvertical_stepsCheckList <- vector("list", M)
-CIGammaCheckList <- vector("list", M)
-# Set seed for reproducability
-set.seed(1)
-for (i in 1:M){
-print(paste("Simulating state: ", i))
-BiasCheckSim <- simulate_HMM(500, delta, Gamma, dists = c("rweibull", "rnorm"),
-                             list(c(k, lambda), c(mu, sigma)))
+CIhorizontal_stepsCheckList <- vector("list", numSim)
+CIvertical_stepsCheckList <- vector("list", numSim)
+CIGammaCheckList <- vector("list", numSim)
+# Set seed  for reproducability if chosen to
+if(seed){set.seed(1)}
 
-Prep_dataBiasCheck <- momentuHMM::prepData(data = data.frame(horizontal_steps = BiasCheckSim$obs_mat[,1],
+
+for (i in 1:numSim){
+print(paste("Simulating: ", i, " dataset"))
+BiasCheckSim <- simulate_HMM(observationsPerSim, delta, Gamma,
+                             simDistributions, simdistributionArguments)
+# We will assume that we are working with a two state model.
+Prep_dataBiasCheck <- momentuHMM::prepData(data = data.frame(horizontal_steps =
+                                           BiasCheckSim$obs_mat[,1],
                                            vertical_steps = BiasCheckSim$obs_mat[,2]),
                                            coordNames = NULL
                                            )
-modBiasCheck <- fitHMM(data = Prep_dataBiasCheck,
-                  nbStates = N,
-                  dist = list(horizontal_steps = "weibull",
-                              vertical_steps = "norm"),
-                  Par0 = list(horizontal_steps = c(k0, lambda0),
-                              vertical_steps = c(mu0, sigma0))
+print(paste("Fitting HMM number: ", i))
+modBiasCheck <- suppressMessages(
+  fitHMM(data = Prep_dataBiasCheck,
+                       nbStates = N,
+                       dist = list(horizontal_steps = fitDistributions[1],
+                                   vertical_steps = fitDistributions[2]),
+                       Par0 = list(horizontal_steps = fitDistributionArguments[[1]],
+                                   vertical_steps = fitDistributionArguments[[2]]))
 )
+print(paste("Fitting done: ", i))
 
-# Classification
-DecodedStatesBiasCheck <- viterbi(m = modBiasCheck) 
-
-classificationCheck[i] <- mean(DecodedStatesBiasCheck == BiasCheckSim$s)
-
+# Classification accuracy:
+classificationCheck[i] <- classificationAccuracy(decodedstates =  viterbi(m = modBiasCheck),
+                                                 toyData = BiasCheckSim)
 # Bias in estimation
 biashorizontal_stepsCheckList[[i]] <- modBiasCheck$mle$horizontal_steps -
-  matrix(c(k,lambda), ncol = N, byrow = TRUE)
+  matrix(simdistributionArguments[[1]], ncol = N, byrow = TRUE)
 
 biasvertical_stepsCheckList[[i]] <- modBiasCheck$mle$vertical_steps -
-  matrix(c(mu,sigma), ncol = N, byrow = TRUE)
+  matrix(simdistributionArguments[[2]], ncol = N, byrow = TRUE)
 
 biasGammaCheckList[[i]] <- modBiasCheck$mle$gamma-Gamma
 
 # Confidence intervals
 # Parameters for observed states:
-CIGammaCheckList
 CIhorizontal_stepsCheckList[[i]] <- (modBiasCheck$CIreal$horizontal_steps$lower <
-                                     matrix(c(k,lambda), ncol = N, byrow = TRUE) &
-                                     matrix(c(k,lambda), ncol = N, byrow = TRUE) <
-                                       modBiasCheck$CIreal$horizontal_steps$upper)
+                                       matrix(simdistributionArguments[[1]], ncol = N,
+                                              byrow = TRUE) &
+                                       modBiasCheck$CIreal$horizontal_steps$upper >
+                                       matrix(simdistributionArguments[[1]], ncol = N,
+                                              byrow = TRUE))
 
 CIvertical_stepsCheckList[[i]] <- (modBiasCheck$CIreal$vertical_steps$lower <
-                                   matrix(c(k,lambda), ncol = N, byrow = TRUE) &
-                                   matrix(c(mu,sigma), ncol = N, byrow = TRUE) <
-                                   modBiasCheck$CIreal$vertical_steps$upper)
+                                     matrix(simdistributionArguments[[2]], ncol = N,
+                                            byrow = TRUE) &
+                                     modBiasCheck$CIreal$vertical_steps$upper > 
+                                     matrix(simdistributionArguments[[2]], ncol = N,
+                                            byrow = TRUE))
 
 CIGammaCheckList[[i]] <- (modBiasCheck$CIreal$gamma$lower < 
                             Gamma & 
                             Gamma <
                             modBiasCheck$CIreal$gamma$upper)
 }
+return(
+  list(numSim = numSim,
+       classificationCheck = classificationCheck,
+       biashorizontal_stepsCheckList = biashorizontal_stepsCheckList,
+       biasvertical_stepsCheckList = biasvertical_stepsCheckList,
+       biasGammaCheckList = biasGammaCheckList,
+       CIhorizontal_stepsCheckList = CIhorizontal_stepsCheckList,
+       CIvertical_stepsCheckList = CIvertical_stepsCheckList,
+       CIGammaCheckList = CIGammaCheckList
+       )
+  )
+}
 
+dummy <- simStudyHMM(numSim = 10, observationsPerSim =  500, delta = delta, Gamma = Gamma, 
+            simDistributions = c("rweibull", "rnorm"),
+            simdistributionArguments = list(c(k, lambda), c(mu, sigma)),
+            fitDistributions = c("weibull", "norm"),
+            fitDistributionArguments = list(c(k0, lambda0), c(mu0, sigma0)), seed = FALSE)
 # Plot results
 # Classification accuracy
-tibble(x = classificationCheck) %>% ggplot(aes(x = x)) + 
+tibble(x = dummy$classificationCheck) %>% ggplot(aes(x = x)) + 
   geom_density(fill = proj_palette[6], alpha = .85)
 
 # Bias in estimates
 # Combinations of row and col are the two last arguments of lapply
-tibble(x = unlist(lapply(biashorizontal_stepsCheckList, "[", 1, 1))) %>% ggplot(aes(x = x)) +
+tibble(x = unlist(lapply(dummy$biashorizontal_stepsCheckList, "[", 1, 1))) %>% ggplot(aes(x = x)) +
   geom_density(fill = proj_palette[6], alpha = .85)
 
 # Bias of transistion probability matrix
-tibble(p11 = unlist(lapply(biasGammaCheckList, "[", 1, 1)),
-       p12 = unlist(lapply(biasGammaCheckList, "[", 1, 2)),
-       p13 = unlist(lapply(biasGammaCheckList, "[", 1, 3)),
-       p21 = unlist(lapply(biasGammaCheckList, "[", 2, 1)),
-       p22 = unlist(lapply(biasGammaCheckList, "[", 2, 2)),
-       p23 = unlist(lapply(biasGammaCheckList, "[", 2, 3)),
-       p31 = unlist(lapply(biasGammaCheckList, "[", 3, 1)),
-       p32 = unlist(lapply(biasGammaCheckList, "[", 3, 2)),
-       p33 = unlist(lapply(biasGammaCheckList, "[", 3, 3))) %>% 
+tibble(p11 = unlist(lapply(dummy$biasGammaCheckList, "[", 1, 1)),
+       p12 = unlist(lapply(dummy$biasGammaCheckList, "[", 1, 2)),
+       p13 = unlist(lapply(dummy$biasGammaCheckList, "[", 1, 3)),
+       p21 = unlist(lapply(dummy$biasGammaCheckList, "[", 2, 1)),
+       p22 = unlist(lapply(dummy$biasGammaCheckList, "[", 2, 2)),
+       p23 = unlist(lapply(dummy$biasGammaCheckList, "[", 2, 3)),
+       p31 = unlist(lapply(dummy$biasGammaCheckList, "[", 3, 1)),
+       p32 = unlist(lapply(dummy$biasGammaCheckList, "[", 3, 2)),
+       p33 = unlist(lapply(dummy$biasGammaCheckList, "[", 3, 3))) %>% 
   pivot_longer(cols = everything(), names_to = "Transition", values_to = "Estimate") %>% 
   ggplot(aes(x = Estimate)) + geom_density(fill = proj_palette[5]) + 
   facet_wrap(~Transition, scale = "free")
 
 # Confidence intervals
 # k and lambda
-sum(unlist(lapply(CIhorizontal_stepsCheckList, "[", 1, 1))/M)
-sum(unlist(lapply(CIhorizontal_stepsCheckList, "[", 1, 2))/M)
-sum(unlist(lapply(CIhorizontal_stepsCheckList, "[", 1, 3))/M)
-sum(unlist(lapply(CIhorizontal_stepsCheckList, "[", 2, 1))/M)
-sum(unlist(lapply(CIhorizontal_stepsCheckList, "[", 2, 2))/M)
-sum(unlist(lapply(CIhorizontal_stepsCheckList, "[", 2, 3))/M)
+sum(unlist(lapply(dummy$CIhorizontal_stepsCheckList, "[", 1, 1))/dummy$numSim)
+sum(unlist(lapply(dummy$CIhorizontal_stepsCheckList, "[", 1, 2))/dummy$numSim)
+sum(unlist(lapply(dummy$CIhorizontal_stepsCheckList, "[", 1, 3))/dummy$numSim)
+sum(unlist(lapply(dummy$CIhorizontal_stepsCheckList, "[", 2, 1))/dummy$numSim)
+sum(unlist(lapply(dummy$CIhorizontal_stepsCheckList, "[", 2, 2))/dummy$numSim)
+sum(unlist(lapply(dummy$CIhorizontal_stepsCheckList, "[", 2, 3))/dummy$numSim)
 
 # mu and sigma
-sum(unlist(lapply(CIvertical_stepsCheckList, "[", 1, 1))/M)
-sum(unlist(lapply(CIvertical_stepsCheckList, "[", 1, 2))/M)
-sum(unlist(lapply(CIvertical_stepsCheckList, "[", 1, 3))/M)
-sum(unlist(lapply(CIvertical_stepsCheckList, "[", 2, 1))/M)
-sum(unlist(lapply(CIvertical_stepsCheckList, "[", 2, 2))/M)
-sum(unlist(lapply(CIvertical_stepsCheckList, "[", 2, 3))/M)
+sum(unlist(lapply(dummy$CIvertical_stepsCheckList, "[", 1, 1))/dummy$numSim)
+sum(unlist(lapply(dummy$CIvertical_stepsCheckList, "[", 1, 2))/dummy$numSim)
+sum(unlist(lapply(dummy$CIvertical_stepsCheckList, "[", 1, 3))/dummy$numSim)
+sum(unlist(lapply(dummy$CIvertical_stepsCheckList, "[", 2, 1))/dummy$numSim)
+sum(unlist(lapply(dummy$CIvertical_stepsCheckList, "[", 2, 2))/dummy$numSim)
+sum(unlist(lapply(dummy$CIvertical_stepsCheckList, "[", 2, 3))/dummy$numSim)
 
 # Gamma
-sum(unlist(lapply(CIGammaCheckList, "[", 1, 1))/M)
-sum(unlist(lapply(CIGammaCheckList, "[", 1, 2))/M)
-sum(unlist(lapply(CIGammaCheckList, "[", 1, 3))/M)
-sum(unlist(lapply(CIGammaCheckList, "[", 2, 1))/M)
-sum(unlist(lapply(CIGammaCheckList, "[", 2, 2))/M)
-sum(unlist(lapply(CIGammaCheckList, "[", 2, 3))/M)
-sum(unlist(lapply(CIGammaCheckList, "[", 3, 1))/M)
-sum(unlist(lapply(CIGammaCheckList, "[", 3, 2))/M)
-sum(unlist(lapply(CIGammaCheckList, "[", 3, 3))/M)
+sum(unlist(lapply(dummy$CIGammaCheckList, "[", 1, 1))/dummy$numSim)
+sum(unlist(lapply(dummy$CIGammaCheckList, "[", 1, 2))/dummy$numSim)
+sum(unlist(lapply(dummy$CIGammaCheckList, "[", 1, 3))/dummy$numSim)
+sum(unlist(lapply(dummy$CIGammaCheckList, "[", 2, 1))/dummy$numSim)
+sum(unlist(lapply(dummy$CIGammaCheckList, "[", 2, 2))/dummy$numSim)
+sum(unlist(lapply(dummy$CIGammaCheckList, "[", 2, 3))/dummy$numSim)
+sum(unlist(lapply(dummy$CIGammaCheckList, "[", 3, 1))/dummy$numSim)
+sum(unlist(lapply(dummy$CIGammaCheckList, "[", 3, 2))/dummy$numSim)
+sum(unlist(lapply(dummy$CIGammaCheckList, "[", 3, 3))/dummy$numSim)
 
