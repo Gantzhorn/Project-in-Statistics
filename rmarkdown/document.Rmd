@@ -9,8 +9,6 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(momentuHMM)
-library(maps)
-library(mapdata)
 library(ggmap)
 library(mapview)
 library(ggthemes)

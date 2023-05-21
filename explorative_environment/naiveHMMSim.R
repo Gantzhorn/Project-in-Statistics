@@ -1,7 +1,6 @@
 library(tidyverse)
 library(momentuHMM)
 library(Rcpp)
-library(profvis)
 library(gridExtra)
 library(tseries)
 library(microbenchmark)

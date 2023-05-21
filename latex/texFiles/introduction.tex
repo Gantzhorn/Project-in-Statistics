@@ -1,8 +1,10 @@
-\subsection*{Hidden markov models in ecology}
-We use hidden markov model a model that allows us to model how a specific system changes over time. The model consists of two stochastic processes: the state- and the observation process. The state process corresponds to the distinct states an animal can have i.e. resting, flying, hunting etc., whereas the observation state corresponds to the altitude of the animal, its distance travelled since last observation etc.
+
+\subsection*{Animal movement modelling with Hidden Markov Models}
+We consider the class of models called discrete-time hidden Markov models (HMM); a popular model for doing inference on animal movement based on telemetry data such as measurements of latitude, longitudes and metres above mean sea level (MAMSL) at fixed time intervals. This data is then often used to calculate the distance an animal has travelled since the between measurements or a similar metric such as the angle formed by the last three measurements.\\ Mathematically, HMMs consists of two stochastic processes: The state- and the observed or state-dependent process. We use the distribution of the observed process to model the measurements from our telemetry data. The idea is that these measurements depend on the underlying state process and thus serves as a proxy of it. When we model animal movements the state process corresponds to the various actions an animal can be doing e.g.: Resting, flying and eating. We can draw this as a graphical model
 \begin{figure}[h]
     \centering
     \includegraphics[scale = .9]{figures/tikzPictures/hiddenMarkovChain.pdf}
-    \caption{A hidden markov model with state process: $S$ and observation process: $\mathbf{Y}$.}
-\end{figure}
+    \caption{A hidden markov model with state process: $S$ and state-dependent process: $\mathbf{Y}$.}
+\end{figure}\\
+Note that when using HMM to model animal movement, the interest lies in doing inference on the behaviour of the animal in question. In here lies one of the strengths of HMMs: The model allows us to directly interpret the behaviour from each of the hidden states.
 \subsection*{The problem of independence}
