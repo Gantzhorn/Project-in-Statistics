@@ -69,15 +69,15 @@ Might not be the best fit to the Data, but it is a start.\
 <!-- Whereas the rate parameter is given by -->
 <!-- $$\hat{\beta} = \frac{\hat{\alpha}}{\sum_{i = 1}^N X_i}$$ -->
 
-<!-- ```{r} -->
-<!-- alpha_hat <- uniroot(function(alpha) {log(alpha)-digamma(alpha)-log(mean(eagleData$horizontal_steps))+mean(log(eagleData$horizontal_steps))},c(0.1, 10))$root -->
-<!-- beta_hat <- alpha_hat/mean(eagleData$horizontal_steps) -->
+```{r}
+alpha_hat <- uniroot(function(alpha) {log(alpha)-digamma(alpha)-log(mean(eagleData$horizontal_steps))+mean(log(eagleData$horizontal_steps))},c(0.1, 10))$root
+beta_hat <- alpha_hat/mean(eagleData$horizontal_steps)
 
-<!-- simGamma <- rgamma(50000, shape = alpha_hat, rate = beta_hat) -->
+simGamma <- rgamma(50000, shape = alpha_hat, rate = beta_hat)
 
-<!-- tibble(x = c(simGamma, eagleData$horizontal_steps), type = rep(c("sim", "obs"), times = c(length(simGamma), length(eagleData$horizontal_steps)))) %>% ggplot(aes(x = x, color = type)) + geom_density() -->
-<!-- ``` -->
-<!-- Indicating a bit better of a fit maybe. -->
+tibble(x = c(simGamma, eagleData$horizontal_steps), type = rep(c("sim", "obs"), times = c(length(simGamma), length(eagleData$horizontal_steps)))) %>% ggplot(aes(x = x, color = type)) + geom_density()
+```
+Indicating a bit better of a fit maybe.
 
 # Fitting the vertical steps to a normal distribution
 The MLE of the mean in the normal distribution is:

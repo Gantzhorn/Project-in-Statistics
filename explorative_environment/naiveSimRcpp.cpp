@@ -1,5 +1,4 @@
-#include <RcppArmadillo.h>
-// [[Rcpp::depends(RcppArmadillo)]]
+#include <Rcpp.h>
 
 // [[Rcpp::export]]
 Rcpp::NumericMatrix split_and_stack_rcpp(Rcpp::NumericVector x,
@@ -69,4 +68,47 @@ double jarque_bera_test_Rcpp_optimized(Rcpp::NumericVector x) {
   // Compute the p-value using the chi-square distribution
   double p_value = exp(-statistic/2);
   return p_value;
+}
+
+// [[Rcpp::export]]
+Rcpp::IntegerVector fastMarkovChainSampler(int obs,
+                                           Rcpp::NumericMatrix Gamma,
+                                           Rcpp::NumericVector delta) {
+  int nStates = delta.length();
+  Rcpp::NumericVector x = Rcpp::runif(obs); // Simulate all comparisons for the chain
+  Rcpp::IntegerVector I(obs);
+  Rcpp::NumericVector probs(nStates);
+  
+  // Simulate the first entry in the Markov chain
+  double cumulativeSum = 0.0;
+  for (int k = 0; k < nStates; k++) {
+    cumulativeSum += delta[k];
+    probs[k] = cumulativeSum;
+  }
+  
+  for (int j = 0; j < nStates; j++) {
+    if (x[0] < probs[j]) {
+      I[0] = j + 1;
+      break;
+    }
+  }
+  
+  // Sample the rest of the states
+  for (int i = 1; i < obs; i++) {
+    cumulativeSum = 0.0;
+    
+    // Update weights according to the transition probability matrix
+    for (int k = 0; k < nStates; k++) {
+      cumulativeSum += Gamma(I[i - 1] - 1, k);
+      probs[k] = cumulativeSum;
+    }
+    
+    for (int j = 0; j < nStates; j++) {
+      if (x[i] < probs[j]) {
+        I[i] = j + 1;
+        break;
+      }
+    }
+  }
+  return I;
 }

@@ -2,6 +2,7 @@ library(tidyverse)
 library(momentuHMM)
 library(Rcpp)
 library(profvis)
+library(gridExtra)
 library(tseries)
 library(microbenchmark)
 theme_set(theme_bw())
@@ -55,20 +56,16 @@ simulate_HMM <- function(T = 500,
   N <- length(delta)
 
   # Simulate the hidden state sequence
-  s <- rep(0, T)
+
   if(fastSampler){
+    s <- fastMarkovChainSampler(T, Gamma, delta)
+  }
+  else{
+    s <- rep(0, T)
     s[1] <- sample.int(N, size = 1, prob = delta)
     for (i in 2:T){
       s[i] <- sample.int(N, size = 1, prob = Gamma[s[(i-1)],])
     }
-    #s[2:T] <- sample.int(N, size = T-1, prob = Gamma[s[1:T-1],], replace=TRUE)
-  }
-  else{
-  s[1] <- sample(1:N, size = 1, prob = delta)
-  for (i in 2:T){
-    s[i] <- sample(1:N, size = 1, prob = Gamma[s[(i-1)],])
-  }
-  #s[2:T] <- sample(1:N, size = T-1, prob = Gamma[s[1:T-1],], replace=TRUE)
   }
   # Simulate the observations
   obs_mat <- matrix(nrow = T, ncol = 2)
@@ -101,10 +98,9 @@ simulate_HMM <- function(T = 500,
   return(list(s = s, obs_mat = obs_mat))
 }
 
-simRes <- simulate_HMM(T, delta, Gamma,
+simRes <- simulate_HMM(5000, delta, Gamma,
                        dists = c("rweibull", "rnorm"),
                        list(c(k, lambda), c(mu, sigma)))
-
 # Fit model
 # Init values for mean and variance of gamma and normal
 lambda0 <- lambda
@@ -125,10 +121,12 @@ modDim1 <- fitHMM(data = Prep_data1,
 )
 plot(modDim1)
 
-DecodedStates1 <- viterbi(m = modDim1) #Most likely state-sequence - compare to true state sequence.
-mean(DecodedStates1 == simRes$s) # Classification accuracy
+classificationAccuracy <- function(decodedstates, toyData){
+  return(mean(decodedstates == toyData$s))
+}
 
-mean(DecodedStates1 != simRes$s)
+DecodedStates1 <- viterbi(m = modDim1) #Most likely state-sequence - compare to true state sequence.
+classificationAccuracy(DecodedStates1, simRes) # Classification accuracy
 
 # Fit the HMM model with the momentuHMM package 2 dimensions
 
@@ -145,130 +143,84 @@ modDim2 <- fitHMM(data = Prep_data2,
                           vertical_steps = c(mu0, sigma0))
               )
 
-plot(modDim2)
-
 DecodedStates2 <- viterbi(m = modDim2) #Most likely state-sequence - compare to true state sequence.
-
-
-mean(DecodedStates2 == simRes$s) # Classification accuracy
-
-mean(DecodedStates2 != simRes$s)
-
-# Sim from model:
-#newSim <- simData(model = modDim2, nbStates = 3, obsPerAnimal = 5000)
-
-### Accessing elements from the momentuHMM fit object
-modDim2$data # data used for fitting
-modDim2$mle # Estimate of parameters of observed chain, initial distribution
-# & probability transition matrix
-
-modDim2$CIreal # Estimates and confidence intervals of the above
-
-modDim2$mod # mod estimates, gradient, hessian, numIter, min of neg loglik
-# time to conv. etc.
-# 
-# # play with the objects
-# # plot confidence intervals for estimates
-# verticalStepsmat <- cbind(modDim2$CIreal$vertical_steps$est,
-#                           modDim2$CIreal$vertical_steps$lower,
-#                           modDim2$CIreal$vertical_steps$upper)
-# 
-# colnames(verticalStepsmat) <- c("estState1", "estState2", "estState3",
-#                                 "lowerState1", "lowerState2", "lowerState3",
-#                                 "upperState1", "upperState2", "upperState3")
-# 
-# verticalSteps <- as_tibble(verticalStepsmat, rownames = "Parameter") %>%
-#   pivot_longer(cols = -Parameter, names_to = "Info",values_to = "Value") %>%
-#   mutate(State = factor(str_sub(Info, start = -1L, end = -1L)), Parameter = factor(Parameter),
-#          Type = factor(case_when(str_detect(Info,"estState") ~ "Estimate",
-#                           str_detect(Info,"lowerState") ~ "Lower",
-#                           str_detect(Info,"upperState")  ~ "Upper"
-#                           ))) %>% select(Parameter, Type, State, Value) %>%
-#   pivot_wider(names_from = "Type", values_from = "Value") %>%
-#   mutate(trueParam = c(mu, sigma))
-# 
-# verticalSteps %>% ggplot(aes(x = State, y = Estimate)) +
-#   geom_point() + geom_errorbar(aes(ymin = Lower, ymax = Upper)) +
-#   facet_wrap(~Parameter, scale = "free") +
-#   geom_point(aes(x = State, y = trueParam), col = "firebrick")
+classificationAccuracy(DecodedStates2, simRes) # Classification accuracy
 
 # All very good let's access fit
 pseudoResmodDim2 <- momentuHMM::pseudoRes(modDim2)
-pseudoResTibble <- tibble(horizontal_stepsRes = pseudoResmodDim2[[1]],
-                          vertical_stepsRes = pseudoResmodDim2[[2]]
-                          ) %>% mutate(time = row_number())
-# replicate base plots made in this object with ggplot2
-momentuHMM::plotPR(modDim2)
+
+pseudoResAssessmentHMM <- function(pseudoResidual){
+# Number of columns in grid
+  if(length(pseudoResidual) > 1){
+    gridColsNum <- 2
+  }
+  else{gridColsNum <- 1}
+# Get tibble with what we need to do plots
+pseudoResTibble <- as_tibble(do.call(cbind, pseudoResidual)) %>% mutate(time = row_number())
 
 # Chain independence:
-pseudoResTibble %>% ggplot(aes(x = time, y = horizontal_stepsRes)) +
-  geom_line(color = proj_palette[5])
+chainIndependence  <- purrr::map(names(pseudoResTibble)[1:(length(names(pseudoResTibble))-1)],
+  function(column_name) {ggplot(pseudoResTibble, aes(x = time, y = .data[[column_name]])) +
+    geom_line(color = proj_palette[5]) +
+    labs(title = column_name)
+})
+
+chainIndependencePlot <- do.call(grid.arrange, c(chainIndependence, ncol = gridColsNum))
 
 # Histogram of residuals with standard normal distribution on top
-pseudoResTibble %>% ggplot(aes(x = vertical_stepsRes)) +
-  geom_histogram(aes(y = after_stat(density)),col = "black", fill = proj_palette[6], alpha = 0.8) + 
-  stat_function(fun = dnorm, args = list(mean = 0, sd = 1), color = proj_palette[5], linewidth = 1)
+histogramNormality <- purrr::map(names(pseudoResTibble)[1:(length(names(pseudoResTibble))-1)],
+           function(column_name) {
+             ggplot(pseudoResTibble, aes(x = .data[[column_name]])) +
+               geom_histogram(aes(y = after_stat(density)),col = "black", fill = proj_palette[6], alpha = 0.8) + 
+               stat_function(fun = dnorm, args = list(mean = 0, sd = 1), color = proj_palette[5], linewidth = 1)
+})
+chainIndependencePlot <- do.call(grid.arrange, c(histogramNormality, ncol = gridColsNum))
 
 # QQ-plot of residuals
-pseudoResTibble %>% ggplot(aes(sample = horizontal_stepsRes)) + 
-  geom_qq() +
-  geom_abline(intercept = 0, slope = 1, color = "red") +
-  labs(title = "QQ Plot of Horizontal Steps Pseudo Residuals")
+qqNormality <- purrr::map(names(pseudoResTibble)[1:(length(names(pseudoResTibble))-1)],
+           function(column_name) {
+             ggplot(pseudoResTibble, aes(sample = .data[[column_name]])) +
+               geom_qq() +
+               geom_abline(intercept = 0, slope = 1, color = proj_palette[3]) 
+           })
+
+qqNormalityPlot <- do.call(grid.arrange, c(qqNormality, ncol = gridColsNum))
 
 # Make autocorrelation plots
-acf_vals <- acf(pseudoResTibble$horizontal_stepsRes, plot = FALSE)
-acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
-ggplot(acftib, aes(x = lag, y = ACF)) +
-  geom_hline(yintercept = 0, color = "black") +
-  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed", color = proj_palette[3]) +
-  geom_segment(aes(xend = lag, yend = 0), color = "black") +
-  xlab("Lag") +
-  ylab("Autocorrelation")
+acf_plots <- map(names(pseudoResTibble)[1:(length(names(pseudoResTibble))-1)], function(column_name) {
+  acf_result <- acf(pseudoResTibble[[column_name]], plot = FALSE)
+  
+  # Create a data frame of lag and ACF values
+  acf_data <- data.frame(lag = acf_result$lag, ACF = acf_result$acf)
+  
+  # Plot the ACF with lag
+  ggplot(acf_data, aes(x = lag, y = ACF)) +
+    geom_hline(yintercept = 0, color = "black") +
+    geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed", color = proj_palette[3], lwd = 1) +
+    geom_segment(aes(xend = lag, yend = 0), color = "black") +
+    xlab("Lag") +
+    ylab("Autocorrelation") +
+    labs(title = column_name)
+})
 
-# More formal test to test fit - jarque bera test on residuals
-jarqueBeraTest <- tseries::jarque.bera.test(pseudoResmodDim2$vertical_stepsRes)
-jarque_bera_test_Rcpp_Naive(pseudoResmodDim2$vertical_stepsRes)
-jarque_bera_test_Rcpp_optimized(pseudoResmodDim2$vertical_stepsRes)
-bench_vector <- c(50, 100, 500, 1000, 2500, 10000, 15000, 30000, 50000, 75000, 100000)
+# Combine the ACF plots using grid.arrange
+acfGridPlot <- gridExtra::grid.arrange(grobs = acf_plots, ncol = gridColsNum)
 
-# Create a data frame to store the results
-results_df <- data.frame(
-  length = integer(),
-  function1_time = double(),
-  function2_time = double()
-)
-
-# Loop over the different input sizes and benchmark the functions
-for (length in bench_vector) {
-  x <- rnorm(length)
-  benchmark_results <- microbenchmark(
-    tseries::jarque.bera.test(x),
-    jarque_bera_test_Rcpp_optimized(x),
-    times = 250  # number of times to repeat each function call
-  )
-  median_times <- aggregate(time/100000000000 ~ expr, benchmark_results, median)
-  results_df <- rbind(
-    results_df,
-    data.frame(
-      length = length,
-      tseries = median_times$time[1],
-      Rcpp = median_times$time[2]
-    )
-  )
+return(list(pseudoResiduals = pseudoResTibble,
+            chainIndependence = chainIndependencePlot,
+            qqNormality = qqNormalityPlot,
+            acfGrid = acfGridPlot))
 }
-
-# Plot the results
-ggplot(results_df, aes(x = length)) +
-  geom_line(aes(y = tseries, color = "tseries"), linewidth = .95) +
-  geom_line(aes(y = Rcpp, color = "Rcpp"), linewidth = .95) +
-  scale_y_log10() + scale_x_log10() + 
-  xlab("Input vector length") +
-  ylab("Computation time (seconds)") +
-  ggtitle("Comparison of tseries- and Rcpp implementation") + 
-  scale_color_manual(values = proj_palette)
-
+# More formal test to test fit - jarque bera test on residuals
+jarqueBeraTests <- function(pseudoResidual){
+  jarqueBeraVector <- numeric(length(pseudoResidual))
+  for (i in seq_along(jarqueBeraVector)) {
+    jarqueBeraVector[i] <- jarque_bera_test_Rcpp_optimized(pseudoResidual[[i]])
+  }
+  return(jarqueBeraVector)
+}
 # Simulate to find bias in fit
-M <- 50 # Number of simulations
+M <- 100 # Number of simulations
 
 # Classification
 classificationCheck <- numeric(M)
@@ -286,7 +238,7 @@ CIGammaCheckList <- vector("list", M)
 set.seed(1)
 for (i in 1:M){
 print(paste("Simulating state: ", i))
-BiasCheckSim <- simulate_HMM(T, delta, Gamma, dists = c("rweibull", "rnorm"),
+BiasCheckSim <- simulate_HMM(500, delta, Gamma, dists = c("rweibull", "rnorm"),
                              list(c(k, lambda), c(mu, sigma)))
 
 Prep_dataBiasCheck <- momentuHMM::prepData(data = data.frame(horizontal_steps = BiasCheckSim$obs_mat[,1],
