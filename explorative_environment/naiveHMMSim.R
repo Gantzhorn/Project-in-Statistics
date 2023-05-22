@@ -385,7 +385,7 @@ numberAfterState <- table(decodedstate)/length(decodedstate)
 # Generate the values to plot the density in
 x <- density(HMMmod$data[-1][, dimensionNumber])$x
 
-parameterMatrix <- modDim2$mle[[dimensionNumber]]
+parameterMatrix <- HMMmod$mle[[dimensionNumber]]
 
 # Used parametric distribution
 dist <- match.fun(distribution)
