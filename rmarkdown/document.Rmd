@@ -90,7 +90,6 @@ Which we implement.
 ```{r message = FALSE}
 mu_hat <- mean(eagleData$vertical_steps)
 sigmasq_hat <- var(eagleData$vertical_steps)
-
 ```
 
 

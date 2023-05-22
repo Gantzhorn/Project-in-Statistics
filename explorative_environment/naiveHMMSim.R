@@ -121,11 +121,11 @@ modDim1 <- fitHMM(data = Prep_data1,
 plot(modDim1)
 
 classificationAccuracy <- function(decodedstates, toyData){
-  return(mean(decodedstates == toyData$s))
+  return(mean(decodedstates == toyData))
 }
 
 DecodedStates1 <- viterbi(m = modDim1) #Most likely state-sequence - compare to true state sequence.
-classificationAccuracy(DecodedStates1, simRes) # Classification accuracy
+classificationAccuracy(DecodedStates1, simRes$s) # Classification accuracy
 
 # Fit the HMM model with the momentuHMM package 2 dimensions
 
@@ -143,7 +143,7 @@ modDim2 <- fitHMM(data = Prep_data2,
               )
 
 DecodedStates2 <- viterbi(m = modDim2) #Most likely state-sequence - compare to true state sequence.
-classificationAccuracy(DecodedStates2, simRes) # Classification accuracy
+classificationAccuracy(DecodedStates2, simRes$s) # Classification accuracy
 
 # All very good let's access fit
 pseudoResmodDim2 <- momentuHMM::pseudoRes(modDim2)
@@ -270,7 +270,7 @@ print(paste("Fitting done: ", i))
 
 # Classification accuracy:
 classificationCheck[i] <- classificationAccuracy(decodedstates =  viterbi(m = modBiasCheck),
-                                                 toyData = BiasCheckSim)
+                                                 toyData = BiasCheckSim$s)
 # Bias in estimation
 biashorizontal_stepsCheckList[[i]] <- modBiasCheck$mle$horizontal_steps -
   matrix(simdistributionArguments[[1]], ncol = N, byrow = TRUE)
@@ -371,3 +371,48 @@ sum(unlist(lapply(dummy$CIGammaCheckList, "[", 3, 1))/dummy$numSim)
 sum(unlist(lapply(dummy$CIGammaCheckList, "[", 3, 2))/dummy$numSim)
 sum(unlist(lapply(dummy$CIGammaCheckList, "[", 3, 3))/dummy$numSim)
 
+# Reproduce plot-method from momentuHMM
+
+densityWeightedAfterState <- function(HMMmod, # An momentuHMM model
+                                      dimensionNumber, # The dimension we want to plot
+                                      distribution, # Density function of observed sampling model given as string (eg.: "dnorm")
+                                      parametersInDistribution, # The number of parameters in samling model
+                                      decodedstate = NA){
+# Calculate decodedstates if unspecified
+if(any(is.na(decodedstate))){decodedstate <- viterbi(m = HMMmod)} 
+numberAfterState <- table(decodedstate)/length(decodedstate)
+
+# Generate the values to plot the density in
+x <- density(HMMmod$data[-1][, dimensionNumber])$x
+
+parameterMatrix <- modDim2$mle[[dimensionNumber]]
+
+# Used parametric distribution
+dist <- match.fun(distribution)
+# Calculate the density values for each distribution
+pdf_values <- sapply(1:N, function(i) {
+  # Take care of scenarios where there are 1 and 2 parameters in distribution
+  if(parametersInDistribution == 1){density  <-  dist(x, parameterMatrix[1, i])}
+  else{density <- dist(x, parameterMatrix[1, i], parameterMatrix[2, i])}
+  density <- density * numberAfterState[i]
+  density
+})
+
+# Create a data frame for the density values
+df <- data.frame(x = rep(x, (N+1)),
+                 density = as.vector(cbind(pdf_values, rowSums(pdf_values))),
+                 state = factor(rep(c(1:N, "Total"), each = length(x))))
+
+# Plot the density functions using ggplot2
+weightedPlot <- ggplot() + 
+  geom_histogram(data = tibble(x = HMMmod$data[-1][, dimensionNumber]),
+                 aes(x = x, after_stat(density)), fill = "gray", col = "black") +
+  geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
+            lwd = 1, alpha = 1.5) +
+  geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
+            lwd = 1, alpha = 1.5, linetype = "dashed") +
+  xlab(names(HMMmod$data[-1])[dimensionNumber]) +
+  ylab("Density") +
+  scale_color_manual(values = proj_palette)
+return(weightedPlot)
+}
