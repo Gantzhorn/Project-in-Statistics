@@ -1,8 +1,7 @@
 We primarily implement and find our results using the R langauge \cite{RLang}.
-Not only do we implement our own software, version 1.5.5 of the package \code{momentuHMM} \cite{momentuHMM} is a paramount part the modelling process itself, and we will be using functions from the package extensively. In addition to \code{momentuHMM} we will make use of a range of auxiliary packages mainly for data wrangling.\cite{tidyverse}\cite{Rcpp} along with other supplementary packages.\cite{gridExtra}\cite{microbenchmark}\cite{ggthemes}\cite{ggmap}\cite{mapview} However, we first introduce the underlying model and its assumptions.
+Not only do we implement our own software, we will also be heaviliy reliant on of the package functions from the package \code{momentuHMM} \cite{momentuHMM} (version 1.5.5). In addition to \code{momentuHMM} we will make use of a range of auxiliary packages mainly for data wrangling.\cite{tidyverse}\cite{Rcpp} along with other supplementary packages.\cite{gridExtra}\cite{microbenchmark}\cite{ggthemes}\cite{ggmap}\cite{mapview} However, we first introduce the underlying model and its assumptions.
 \subsection*{Model formulation}
-A hidden markov model is a 
-The two stochastics processes from the Hidden Markov Model are: the state process, $S_t$ and the observation $\mathbf{Y_t}$, which are latent and observed respectively. The variation of the HMM we work with is a discrete-time and finite state HMM i.e. $t\in\{1,\dots , T\}$ and $S_t\in\{1,\dots , N\}$ for some $T, N\in\mathbb{N}$. We assume that the state space is determined by an initial probability vector, $\delta = \left(\delta_1,\dots, \delta_N \right)$. Furthermore, it has transition probability matrix
+A hidden markov model consists of two stochastic processes: The state process, $S_t$ and the observation $\mathbf{Y_t}$ process, which are latent and observed respectively. The variation of the HMM we work with is a discrete-time and finite state HMM i.e. $t\in\{1,\dots , T\}$ and $S_t\in\{1,\dots , N\}$ for some $T, N\in\mathbb{N}$. We assume that the state space is determined by an initial probability vector, $\delta = \left(\mathbb{P}(S_1 = N),\dots \mathbb{P}(S_1 = N)\right)$. Furthermore, it has transition probability matrix
 \[
     \Gamma = \begin{pmatrix}
         \gamma_{11} & \dots &  \gamma_{1N} \\
@@ -10,5 +9,5 @@ The two stochastics processes from the Hidden Markov Model are: the state proces
         \gamma_{N1} & \dots & \gamma_{NN}
     \end{pmatrix}
 \]
-where $\gamma_{ij}$ is the probability of jumping from state $i$ to state $j$. We assume that the chain has the markov property. That is $\gamma_{ij} = P\left(S_{t+1} = j | S_t = i\right)$. Now, the observed process depends on the value of the state process in that it is drawn from some state-dependent distribution. We assume that the observed process is conditionally indepedent given the state at time $t$. 
+that is $\gamma_{ij}$ is the probability of jumping from state $i$ to state $j$. We assume that the chain has the markov property. That is $\gamma_{ij} = \mathbb{P}\left(S_{t+1} = j | S_t = i\right)$. Now, the observed process depends on the value of the state process in that it is drawn from some parametric distributions in which the parameters depend on the specific state at time $t$. A common working assumption is that the observed process is conditionally indepedent given the state at time $t$. 
 \cite{UncoveringEcologicalState}
