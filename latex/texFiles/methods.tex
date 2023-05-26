@@ -1,13 +1,36 @@
 We primarily implement and find our results using the R langauge \cite{RLang}.
 Not only do we implement our own software, we will also be heaviliy reliant on of the package functions from the package \code{momentuHMM} \cite{momentuHMM} (version 1.5.5). In addition to \code{momentuHMM} we will make use of a range of auxiliary packages mainly for data wrangling.\cite{tidyverse}\cite{Rcpp} along with other supplementary packages.\cite{gridExtra}\cite{microbenchmark}\cite{ggthemes}\cite{ggmap}\cite{mapview} However, we first introduce the underlying model and its assumptions.
-\subsection*{Model formulation}
-A hidden markov model consists of two stochastic processes: The state process, $S_t$ and the observation $\mathbf{Y_t}$ process, which are latent and observed respectively. The variation of the HMM we work with is a discrete-time and finite state HMM i.e. $t\in\{1,\dots , T\}$ and $S_t\in\{1,\dots , N\}$ for some $T, N\in\mathbb{N}$. We assume that the state space is determined by an initial probability vector, $\delta = \left(\mathbb{P}(S_1 = N),\dots \mathbb{P}(S_1 = N)\right)$. Furthermore, it has transition probability matrix
-\[
+\subsection*{Model formulation and estimation}
+A hidden markov model consists of two stochastic processes: The state process, $S_t$ and the observation $\mathbf{Y_t}$ process, which are latent and observed respectively. The variation of the HMM we work with is a discrete-time and finite state HMM i.e. $t\in\{1,\dots , T\}$ and $S_t\in\{1,\dots , N\}$ for some $T, N\in\mathbb{N}$. We assume that the state space is determined by an initial probability vector, $\delta = \left(\mathbb{P}(S_1 = 1),\dots \mathbb{P}(S_1 = N)\right)$. Furthermore, it has transition probability matrix
+\begin{align}
     \Gamma = \begin{pmatrix}
         \gamma_{11} & \dots &  \gamma_{1N} \\
         \vdots & \ddots & \vdots \\
         \gamma_{N1} & \dots & \gamma_{NN}
-    \end{pmatrix}
-\]
-that is $\gamma_{ij}$ is the probability of jumping from state $i$ to state $j$. We assume that the chain has the markov property. That is $\gamma_{ij} = \mathbb{P}\left(S_{t+1} = j | S_t = i\right)$. Now, the observed process depends on the value of the state process in that it is drawn from some parametric distributions in which the parameters depend on the specific state at time $t$. A common working assumption is that the observed process is conditionally indepedent given the state at time $t$. 
-\cite{UncoveringEcologicalState}
+    \end{pmatrix} \label{Gamma1}
+\end{align}
+that is $\gamma_{ij}$ is the probability of jumping from state $i$ to state $j$. We assume that the chain has the markov property. That is $\gamma_{ij} = \mathbb{P}\left(S_{t+1} = j | S_t = i\right)$. Now, the observed process depends on the value of the state process in that it is drawn from some parametric distributions in which the parameters depend on the specific state at time $t$.
+A common working assumption is that the observed process is conditionally indepedent given the state at time $t$. 
+\cite{UncoveringEcologicalState}. This allows us to organize the state-dependent distributions $\mathbb{P}(\mathbf{Y}_t)$ in the following matrix
+\begin{align}
+    \mathbb{P}(\mathbf{Y}_t) = \begin{pmatrix}
+        P(\mathbf{Y}_t | S_t = 1) & \dots &  0 \\
+        \vdots & \ddots & \vdots \\
+        0 & \dots & P(\mathbf{Y}_t | S_t = N)
+    \end{pmatrix}  
+\end{align}
+which will be notationally useful to us in the derivation of the so-called forward algorithm. Our estimation method of choice is maximum likelihood estimation. Using the notation $S = \{S_1,\dots, S_T\}$ and $\mathbf{y} = \{\mathbf{y}_1,\dots, \mathbf{y}_T\}$ with an HMM as described in the above, we get that the likelihood, $\mathcal{L}_T$, of observing a particular sequence is given be the law of total probability
+\begin{align}
+    \mathcal{L}_T = \mathbb{P}(\mathbf{Y} = \mathbf{y}) = \sum_{S_1 = 1}^N\dots \sum_{S_T = 1}^N \mathbb{P}(\mathbf{Y} = \mathbf{y}, S)
+\end{align}
+By the markov property each term is
+\begin{align}
+    \mathbb{P}(\mathbf{Y} = \mathbf{y}, S) = \mathbb{P}(S_1)\prod_{t = 2}^T \mathbb{P}(S_t | S_{t-1})\prod_{t = 1}^T \mathbb{P}(\mathbf{Y}_t = \mathbf{y}_t | S_t) 
+    \label{termsInLikelihood}
+\end{align}
+However, computing $\mathcal{L}_T$ is quite intractible even for relatively small values of $T$ and $N$. Where are summing $N^T$ terms composed of $2T$ factors, whence the time complexity is $\mathcal{O}\left(N^TT\right)$. Now, by proposition 1 in section 2.3.2 \cite{HHMForTimesSeries} this can be drammatically simplified to
+\begin{align}
+    \mathcal{L}_T = \delta\mathbb{P}(\mathbf{y}_1)\prod_{i = 1}^{t}\Gamma P(\mathbf{y}_t)\mathbf{1}
+    \label{likelihoodOpt}
+\end{align}
+And via a recursive scheme known as the forward algorithm, this can be computed with a complexity of $\mathcal{O}(N^2T)$. To find estimates for the parameters in the model, we use a numerical maximizer to maximize (\ref{likelihoodOpt}) with respect to $\delta, \Gamma$ and the parameters of $P(\mathbf{Y}_1)$. In addition, we will draw inference about the underlying hidden states using the algorithm known as the viteri algorithm. Section 5.3.2 \cite{HHMForTimesSeries}  derives this and the idea is basically the same as in the likelihood maximization part above. Use the conditional independence- and markov properties of the model to devise a recursive scheme. In this instance we naturally maximize the probability $\mathbb{P}(S | \mathbf{Y})$, which by Bayes' theorem is equivalent to maximizing (\ref{termsInLikelihood}). In this case it is shown that the time complexity of the recursive scheme is $\mathcal{O}(NT)$.
