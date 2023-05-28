@@ -1,5 +1,5 @@
 
-\subsection*{Animal movement modelling with Hidden Markov Models}
+\subsection{Animal movement modelling with Hidden Markov Models}
 We consider the class of models called discrete-time hidden Markov models (HMM); a popular model for doing inference on animal movement based on telemetry data such as measurements of latitude, longitudes and metres above mean sea level (MAMSL) at fixed time intervals. This data is then often used to calculate the distance an animal has travelled since the between measurements or a similar metric such as the angle formed by the last three measurements.\\ Mathematically, HMMs consists of two stochastic processes: The state process also called the hidden- or latent process and the observed- or state-dependent process. 
 We use the distribution of the observed process to model the measurements from our telemetry data. The idea is that these measurements depend on the underlying state process and thus can serve as a proxy of it. When we model animal movements the state process would for instance be equivalent to the various, to us unobserved, actions an animal could do e.g.: Resting, flying and eating. We can draw this model as a graphical model
 \begin{figure}[h]

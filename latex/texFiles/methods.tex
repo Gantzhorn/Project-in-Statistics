@@ -1,6 +1,6 @@
 We primarily implement and find our results using the R langauge \cite{RLang}.
 Not only do we implement our own software, we will also be heaviliy reliant on of the package functions from the package \code{momentuHMM} \cite{momentuHMM} (version 1.5.5). In addition to \code{momentuHMM} we will make use of a range of auxiliary packages mainly for data wrangling.\cite{tidyverse}\cite{Rcpp} along with other supplementary packages.\cite{gridExtra}\cite{microbenchmark}\cite{ggthemes}\cite{ggmap}\cite{mapview} However, we first introduce the underlying model and its assumptions.
-\subsection*{Model formulation and estimation}
+\subsection{Model formulation and estimation}
 A hidden markov model consists of two stochastic processes: The state process, $S_t$ and the observation $\mathbf{Y_t}$ process, which are latent and observed respectively. The variation of the HMM we work with is a discrete-time and finite state HMM i.e. $t\in\{1,\dots , T\}$ and $S_t\in\{1,\dots , N\}$ for some $T, N\in\mathbb{N}$. We assume that the state space is determined by an initial probability vector, $\delta = \left(\mathbb{P}(S_1 = 1),\dots \mathbb{P}(S_1 = N)\right)$. Furthermore, it has transition probability matrix
 \begin{align}
     \Gamma = \begin{pmatrix}

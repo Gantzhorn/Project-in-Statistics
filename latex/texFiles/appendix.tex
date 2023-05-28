@@ -1,0 +1,37 @@
+\section{Finding the density of the Weibull-Gaussian distribution}\label{weibullGaussianAppendix}
+To find the density of the Weibull-Gaussian distribution, we let $(X_1, X_2)$ be bivariate gaussian with mean vector, $\xi = \mathbf{0}$ and covariance matrix $\Sigma = \begin{pmatrix}
+    1 & \rho \\
+    \rho & 1
+\end{pmatrix}$. Now, we apply the methodology described in section \ref{correlatedVariables} in the following way. Let $Y$ be the transformed variable. Since we want $Y_1$ just to be a non-standard gaussian we can skip the quantile tranformation theorem on this entry. Therefore define the map $h_1: \mathbb{R}^2 \mapsto \mathbb{R}$ by $h_1(x_1, x_2) = x_1\sigma + \mu$ and $h_2:\mathbb{R}^2 \mapsto \mathbb{R}$ as $ h_2(x_1, x_2) = \lambda\left(-\log\left(1-\Phi(x_2)\right)\right)^{\frac{1}{k}}$. Defining 
+\begin{align}
+    Y = \begin{pmatrix}
+        h_1(x_1, x_2)\\
+        h_2(x_1, x_2)
+    \end{pmatrix}    
+\end{align}
+we have be the quantile tranformation theorem that
+$Y_1 \sim \mathcal{N}(\mu, \sigma^2)$ and $Y_2 \sim Wei(k, \lambda)$. Recall that the multivariate density transformation theorem states that $Y$ then has density
+\begin{align}
+    g(y_1, y_2) = f\left(h_1^{-1}(y_1, y_2), h_2^{-1}(y_1, y_2)\right)\abs{J(y_1, y_2)} \label{gDensity}
+\end{align}
+Where $f$ is the density of the bivariate normal distribution
+\begin{align}
+    f(\mathbf{x}) = \frac{1}{2\pi\sqrt{\det(\Sigma)}}\exp\left(-\frac{1}{2}\mathbf{x}^\top \Sigma^{-1}\mathbf{x}\right)
+\end{align}
+In (\ref{gDensity}) the jacobian $J$ is 
+\begin{align}
+    J(y_1, y_2) = \det\left(\begin{matrix}
+        \frac{\partial h_1^{-1}(y_1, y_2)}{\partial y_1} & \frac{\partial h_1^{-1}(y_1, y_2)}{\partial y_2} \\
+        \frac{\partial h_2^{-1}(y_1, y_2)}{\partial y_1} & \frac{\partial h_2^{-1}(y_1, y_2)}{\partial y_2}
+    \end{matrix}\right)  
+\end{align}
+We easily find
+\begin{align}
+    h_1^{-1}(y_1, y_2) = \frac{y_1-\mu}{\sigma}, \qquad 
+    h_2^{-1}(y_1, y_2) = \Phi^{-1}\left(1-e^{-\left(\frac{y_2}{\lambda}\right)^k}\right) 
+\end{align}
+Differentiating and setting into the definition of the jacobian yields:
+\begin{align}
+    J(y_1, y_2) = \frac{k\left(\frac{y_2}{\lambda}\right)^ke^{-\left(\frac{y_2}{\lambda}\right)^k}}{\varphi\left(\Phi^{-1}\left(1-e^{-\left(\frac{y_2}{\lambda}\right)^k}\right)\right)y_2\sigma }    
+\end{align}
+where $\varphi$ is the density of the standard normal distribution. We can then obtain the density by combining above formulae.
