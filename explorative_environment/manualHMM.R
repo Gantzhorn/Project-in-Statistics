@@ -64,7 +64,7 @@ gDensityVec <- function(x, y, k, lambda, mu, sigma, covarianceMatrix, eps) {
 ## Simulate realisations from a Markov chain
 
 N <- 3 # Number of states
-T <- 1000 # Number of realisations
+T <- 10000 # Number of realisations
 delta <- c(1 / 3, 1 / 3, 1 / 3) # Initial distribution
 Gamma <- matrix(c(0.9, 0.05, 0.05, 0.05, 0.9, 0.05, 0.05, 0.05, 0.9), ncol = 3) # Transition probability matrix
 s <- rep(NA, times = T) # State vector
@@ -193,3 +193,70 @@ a <- fit_weibull_normal_hmm(y1, y2, c(mu0, sigma0, k0, lambda0), Gamma0, delta0)
 b <- fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0, delta0) # Independent fit
 c <- fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
                        delta0, independent = FALSE, covarianceMatrix = covMat) # correlated fit
+
+
+hiddenStateSequence_weibullnormal <- function(step1, # Values in weibull observations
+                                   step2, # Values in normal observations
+                                   par, # Concatenation of all parameters
+                                   Gamma, #Transition probability matrix
+                                   delta, # Initial distribution
+                                   independent = TRUE,
+                                   covarianceMatrix = NULL,  # Specify if the data is assumed independent in the fitting
+                                   eps = 0.001)
+{ 
+  
+  # Function that computes minus the log-likelihood
+  viterbi <- function(step1, step2, par) {
+    T <- length(step1)
+    # Unpack parameters for the first observation vector
+    mu <- par[1:3]
+    sigma <- par[4:6]
+    # Parameter for the Weibull distribution of the second observation vector
+    shape <- par[7:9] 
+    scale <- par[10:12]
+    # S.T.P 
+    Gamma <- diag(3) 
+    Gamma[!Gamma] <- par[13:18]  # Fill non-diagonal entries
+    Gamma <- Gamma / rowSums(Gamma)  # Divide by row sums
+    # Initial distribution
+    delta <- c(par[19], par[20], 1)
+    delta <- delta / sum(delta)
+    all_probs <- matrix(1, nrow = T, ncol = 3)  # Probabilities of observations from the first distribution
+    for (i in 1:3) {
+      if(independent){
+        step_prob1 <- dweibull(step1, shape[i], scale[i])  # Probability density function for the second distribution
+        step_prob2 <- dnorm(step2, mean = mu[i], sd = sigma[i])  # Probability density function for the second distribution
+        all_probs[, i] <- step_prob1*step_prob2
+      }
+      else{
+        all_probs[, i] <- gDensityVec(step1, step2, shape[i], scale[i], mu[i], sigma[i], covarianceMatrix, eps)
+      }
+    }
+    v <- delta * all_probs[1, ]
+    xi <- matrix(0,nrow=T,ncol=3)
+    xi[1,] <- v/sum(v)
+    for (t in 2:T) {
+      v <- apply(xi[t-1,]*Gamma,2,max)*all_probs[t,]
+      xi[t,] <- v/sum(v)
+    }
+    # most probable state sequence
+    stSeq <- rep(NA,T)
+    stSeq[T] <- which.max(xi[T,])
+    for (t in (T-1):1)
+      stSeq[t] <- which.max(Gamma[,stSeq[t+1]]*xi[t,])
+    return(stSeq)
+  }
+  
+  # Transform Gamma0 and delta0 to working scale
+  wGamma0 <- Gamma0[!diag(3)]
+  wDelta0 <- delta0[-3] / delta0[3]
+  par0 <- c(par,  wGamma0, wDelta0)
+  return(viterbi(step1, step2, par0))
+}
+
+
+mean(hiddenStateSequence_weibullnormal(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma, delta) == s)
+
+
+mean(hiddenStateSequence_weibullnormal(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma, delta, independent = FALSE,
+                                       covMat, eps = 0.0001) == s)
