@@ -10,6 +10,11 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(momentuHMM)
 library(ggmap)
+library(plotly)
+library(geodata)
+library(plot3D)
+library(rayshader)
+library(sf)
 library(mapview)
 library(ggthemes)
 theme_set(theme_bw())
@@ -18,9 +23,9 @@ proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
                          "#CC79A7")
 ```
 
-# Test
+# Analysis of eagle data
 
-Check if everything works
+First we load the data and calculate the vertical_steps by looking at the changing in altitude to the last position
 
 ```{r, include=FALSE, message = FALSE}
 eagleDataOriginal <- readr::read_csv("Eagle_data_with_GPS_positions.csv")
@@ -31,15 +36,12 @@ eagleData <- eagleData %>% group_by(Segment_ID) %>%
     rename(horizontal_steps = Step_length) %>% 
     slice(2:n())
 ```
-
-# We need to try to identify three distinct states.
-
-# Estimation using Weibull- and Gamma distributions
+## Estimation using Weibull- and Gamma distributions
+### Weibull distribution
 First assume that Step_length is Weibull distributed. The MLE of $k$ is the solution to
 $$
 0 = \frac{\sum_{i = 1}^N X_i^k\log(X_i)}{\sum_{i = 1}^N X_i^k} - \frac{1}{k} - \frac{1}{N}\sum_{i = 1}^N \log(X_i)
 $$
-
 whereas the MLE of $\lambda$ given $k$ is:
 $$
 \hat{\lambda} = \left(\frac{1}{N} \sum_{i = 1}^N X_i^k\right)^{\frac{1}{k}}
@@ -50,34 +52,20 @@ k_hat <- uniroot(function(k) {sum(eagleData$horizontal_steps^k * log(eagleData$h
                     c(0.1, 10))$root
 lambda_hat <- (mean(eagleData$horizontal_steps^k_hat))^(1/k_hat)
 ```
-
-We can simulate from this distribution and compare with the data
-
-```{r message = FALSE}
-simWei <- rweibull(50000, shape = k_hat, scale = lambda_hat)
-
-tibble(x = c(simWei, eagleData$horizontal_steps), type = rep(c("sim", "obs"), times = c(length(simWei), length(eagleData$horizontal_steps)))) %>% ggplot(aes(x = x, color = type)) + geom_density()
-```
-Might not be the best fit to the Data, but it is a start.\
-<!-- Try to fit Gamma distribution:\ -->
-<!-- MLE of shape parameter in gamma distribution is the solution to the equation: -->
-<!-- $$ -->
-<!-- \log(\alpha)-\psi(\alpha) = \log\left(\frac{1}{N}\sum_{i=1}^N\log(X_i)\right)-\frac{1}{N}\sum_{i = 1}^N\log(X_i) -->
-<!-- $$ -->
-<!-- Whereas the rate parameter is given by -->
-<!-- $$\hat{\beta} = \frac{\hat{\alpha}}{\sum_{i = 1}^N X_i}$$ -->
+### Gamma distribution
+MLE of shape parameter in gamma distribution is the solution to the equation:
+$$
+\log(\alpha)-\psi(\alpha) = \log\left(\frac{1}{N}\sum_{i=1}^N\log(X_i)\right)-\frac{1}{N}\sum_{i = 1}^N\log(X_i)
+$$
+Whereas the rate parameter is given by
+$$\hat{\beta} = \frac{\hat{\alpha}}{\sum_{i = 1}^N X_i}$$
 
 ```{r}
 alpha_hat <- uniroot(function(alpha) {log(alpha)-digamma(alpha)-log(mean(eagleData$horizontal_steps))+mean(log(eagleData$horizontal_steps))},c(0.1, 10))$root
 beta_hat <- alpha_hat/mean(eagleData$horizontal_steps)
-
-simGamma <- rgamma(50000, shape = alpha_hat, rate = beta_hat)
-
-tibble(x = c(simGamma, eagleData$horizontal_steps), type = rep(c("sim", "obs"), times = c(length(simGamma), length(eagleData$horizontal_steps)))) %>% ggplot(aes(x = x, color = type)) + geom_density()
 ```
-Indicating a bit better of a fit maybe.
 
-# Fitting the vertical steps to a normal distribution
+### Fitting the vertical steps to a normal distribution
 The MLE of the mean in the normal distribution is:
 $$
 \hat{\mu} = \frac{1}{N}\sum_{i = 1}^N X_i
@@ -104,7 +92,7 @@ We also need the number of observations per animal for the validation process la
 obsPerAnimal <- as.list(as.numeric(table(prepEagleData$ID))) 
 ```
 
-# Model fitting
+## Model fitting
 
 We fit the model using the parameters from above and decode the states
 ```{r message = FALSE}
@@ -127,10 +115,7 @@ eagleFit1 <- momentuHMM::fitHMM(prepEagleData,
 decodedStatesFit1 <- viterbi(m = eagleFit1)
 
 ```
-Use the generic plot method on the model
-```{r message = FALSE}
-#plot(eagleFit1)
-```
+Instead of using the generic plot method, we can use our own
 
 ```{r message = FALSE}
 numberAfterState <- decodedStatesFit1 %>% tibble(stateNum=.) %>% group_by(stateNum) %>% count() %>% ungroup() %>% mutate(prop = n/sum(n))
@@ -179,15 +164,16 @@ Add decoded states to the dataset
 ```{r message = FALSE}
 eagleData <- tibble(eagleData, decodedstates = decodedStatesFit1)
 ```
-And plot the results
+And plot the data stratified to the states
 ```{r message = FALSE}
 eagleData <- eagleData %>% mutate(decodedstates = factor(decodedstates))
 
-ggplot(eagleData, aes(x = log(horizontal_steps), y = vertical_steps)) + geom_point(alpha = .6) + facet_wrap(~decodedstates,ncol = 1)
+ggplot(eagleData, aes(x = horizontal_steps, y = vertical_steps, col = decodedstates)) + geom_point(alpha = .6) +
+  scale_color_manual(values = proj_palette)
 ```
 
-# Assess the fitted model
-Look at simulations from the model and whether they show similar patterns as the observed data.
+## Assess the fitted model
+Look at simulations from the model and whether they show similar patterns as the observed data. First we simulate from the model
 
 ```{r message = FALSE, include = FALSE}
 eagleSim <- momentuHMM::simData(nbAnimals = max(as.numeric(levels(prepEagleData$ID))),
@@ -197,6 +183,8 @@ eagleSim <- momentuHMM::simData(nbAnimals = max(as.numeric(levels(prepEagleData$
 eagleSim
 ```
 
+Then we compare the densities qualitatively
+
 ```{r message = FALSE}
 bind_rows(eagleSim, prepEagleData) %>%
     mutate(Data = rep(c("Sim", "Obs"), each = nrow(eagleSim))) %>%
@@ -204,7 +192,8 @@ bind_rows(eagleSim, prepEagleData) %>%
   ggplot(aes(x = Move, fill = Data)) + geom_density() +
   scale_fill_manual(values = proj_palette) + facet_wrap(~Movement_type, ncol = 1, scale = "free")
 ```
-# Assess fit
+
+Now we compute the pseudoresiduals
 
 ```{r message = FALSE}
 pseudoReseagleFit1 <- momentuHMM::pseudoRes(eagleFit1)
@@ -246,6 +235,8 @@ ggplot(acftib, aes(x = lag, y = ACF)) +
   ylab("Autocorrelation")
 ```
 
+## Plot a few individual birds
+### Using mapview
 ```{r message = FALSE}
  # Find segment with the most observations:
 favourite_bird <- eagleData %>% group_by(Segment_ID) %>% summarise(n = n()) %>% ungroup() %>% 
@@ -260,7 +251,8 @@ favourite_birdTibble <- eagleData %>% filter(Segment_ID == 48)
 mapview::mapview(favourite_birdTibble, xcol = "Longitude", ycol = "Latitude", crs = 4326,
                  grid = FALSE, zcol = "decodedstates")
 ```
-Try plotting with a different package
+### Using ggmap
+
 ```{r}
 favoriteBirdMap <- ggmap::get_stamenmap(bbox = c(left = min(favourite_birdTibble$Longitude),
                               right = max(favourite_birdTibble$Longitude),
@@ -277,7 +269,7 @@ allBirdsMap <- ggmap::get_stamenmap(bbox = c(left = min(eagleData$Longitude),
                               crop = FALSE,
                               zoom = 8)
 
-ggmap(favoriteBirdMap)+
+favoriteBirdMapAndTracks <- ggmap(favoriteBirdMap)+
   geom_line(data = favourite_birdTibble, aes(x = Longitude, y = Latitude),
             lwd = 0.1, col = "black") + 
   geom_point(data = favourite_birdTibble, aes(x = Longitude, y = Latitude, col = decodedstates)) +
@@ -291,8 +283,10 @@ ggmap(favoriteBirdMap)+
         legend.title = element_text(size = 12, face = "bold"),
         legend.text = element_text(size = 10),
         legend.position = "bottom")
+favoriteBirdMapAndTracks
 ```
 
+# Plot the tracks of the birds
 ```{r}
 ggmap(allBirdsMap) +
   geom_point(data = eagleData, aes(x = Longitude, y = Latitude, group = Segment_ID),
@@ -306,5 +300,22 @@ ggmap(allBirdsMap) +
         legend.title = element_text(size = 12, face = "bold"),
         legend.text = element_text(size = 10),
         legend.position = "bottom")
+```
+## Try plotting the tracks in 3D
+
+
+
+```{r}
+fig <- plot_ly(favourite_birdTibble, x = ~Longitude, y = ~Latitude, z = ~Altitude, color = ~decodedstates,
+               colors = proj_palette[1:3])
+
+fig <- fig %>% add_markers()
+
+fig <- fig %>% layout(scene = list(xaxis = list(title = 'Longitude'),
+
+                     yaxis = list(title = 'Latitude'),
+
+                     zaxis = list(title = 'Altitude')))
+fig
 ```
 
