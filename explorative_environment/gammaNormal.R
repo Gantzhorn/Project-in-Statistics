@@ -130,12 +130,16 @@ eagleFit1 <- momentuHMM::fitHMM(prepEagleData,
                                             vertical_steps = c(mu0, sigma0))
 )
 decodedStates <- momentuHMM::viterbi(eagleFit1)
+localDecoding <- momentuHMM::stateProbs(eagleFit1)
+
+max_indices <- max.col(a)
+
 statesForSim <- rep(0, nrow(eagleFit1$data))
 
 statesForSim[1] <- sample.int(N, 1, prob = eagleFit1$mle$delta[1,])
 
 for(i in 2:nrow(eagleFit1$data)){
-  statesForSim[i] <- sample.int(N, 1, prob = eagleFit1$mle$gamma[same[(i-1)], ])
+  statesForSim[i] <- sample.int(N, 1, prob = eagleFit1$mle$gamma[statesForSim[(i-1)], ])
 }
 statesForSim %>% table()
 decodedStates %>% table()

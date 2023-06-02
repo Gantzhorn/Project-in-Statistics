@@ -1,4 +1,5 @@
 library(tidyverse)
+library(momentuHMM)
 # Helper functions for bivariate weibull-normal density
 determinantCalculator <- function(Matrix){
   Matrix[1,1]*Matrix[2,2]-Matrix[2,1]*Matrix[1,2]
@@ -64,7 +65,7 @@ gDensityVec <- function(x, y, k, lambda, mu, sigma, covarianceMatrix, eps) {
 ## Simulate realisations from a Markov chain
 
 N <- 3 # Number of states
-T <- 10000 # Number of realisations
+T <- 1000 # Number of realisations
 delta <- c(1 / 3, 1 / 3, 1 / 3) # Initial distribution
 Gamma <- matrix(c(0.9, 0.05, 0.05, 0.05, 0.9, 0.05, 0.05, 0.05, 0.9), ncol = 3) # Transition probability matrix
 s <- rep(NA, times = T) # State vector
@@ -75,16 +76,16 @@ for(t in 2:T) {
 
 pal <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 ## Simulate realisations from an HMM
-k <- c(1, 7, 20)
-lambda <- c(1, 2, 5)
-mu <- c(-1, 0, 1) # Means of the state-dependent distributions
-sigma <- c(0.5, 0.25, 0.5) # Standard deviations of the state-dependent distributions
+k <- c(1, 3, 5)
+lambda <- c(1, 2, 4)
+mu <- c(-1, 0, 1.25) # Means of the state-dependent distributions
+sigma <- c(1.5, 0.75, 1) # Standard deviations of the state-dependent distributions
 # Simulate independent data
 y1 <- rweibull(T, shape = k[s], lambda[s])
 y2 <- rnorm(T, mean = mu[s], sd = sigma[s])
 
 
-covMat <- matrix(c(1,-0.9, -0.9, 1), nrow = 2)
+covMat <- matrix(c(1,-0.3, -0.3, 1), nrow = 2)
 norm_2d <- MASS::mvrnorm(T, mu = c(0,0), Sigma = covMat, empirical = TRUE)
 
 X <- norm_2d[, 1]
@@ -92,15 +93,16 @@ Y <- norm_2d[, 2]
 
 X_prime <- qweibull(pnorm(X), shape = k[s], scale = lambda[s])
 Y_prime <- Y*sigma[s] + mu[s]
-
+tibble(x = y1, y = y2, s = factor(s)) %>% ggplot(aes(x = x, y = y, col = s)) + geom_point()
+tibble(x = X_prime, y = Y_prime, s = factor(s)) %>% ggplot(aes(x = x, y = y, col = s)) + geom_point()
 
 # Initial parameters
-mu0 <- c(-1, 0, 1) # Initial values for the mean
-sigma0 <- c(0.5, 0.25, 0.5) # Initial values for the standard deviation
-k0 <- c(1, 7, 20)
-lambda0 <- c(1, 2, 5)
-Gamma0 <- matrix(c(0.9, 0.05, 0.05, 0.05, 0.9, 0.05, 0.05, 0.05, 0.9), ncol = 3) # Transition probability matrix
-delta0 <- c(1 / 3, 1 / 3, 1 / 3)
+mu0 <- mu # Initial values for the mean
+sigma0 <- sigma # Initial values for the standard deviation
+k0 <- k
+lambda0 <- lambda
+Gamma0 <- Gamma # Transition probability matrix
+delta0 <- delta
 
 
 
@@ -187,12 +189,35 @@ fit_weibull_normal_hmm <- function(step1, # Values in weibull observations
          delta = delta_MLE)
   )
 }
-# Call the function to test
-a <- fit_weibull_normal_hmm(y1, y2, c(mu0, sigma0, k0, lambda0), Gamma0, delta0) # Independent fit
+prepSimIndependent <- prepData(tibble(x = y1, y = y2), coordNames = NULL)
+
+# Independent fit
+manualMod1 <- fit_weibull_normal_hmm(y1, y2, c(mu0, sigma0, k0, lambda0), Gamma0, delta0) 
+momentuMod1 <- fitHMM(data = prepSimIndependent,
+                      nbStates = 3,
+                      dist = list(x = "weibull",
+                                  y = "norm"),
+                      Par0 = list(x = c(k0, lambda0),
+                                  y = c(mu0, sigma0))
+)
+
 # Correlation fit
-b <- fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0, delta0) # Independent fit
-c <- fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
-                       delta0, independent = FALSE, covarianceMatrix = covMat) # correlated fit
+prepSimCorrelated <- prepData(tibble(x = X_prime, y = Y_prime), coordNames = NULL)
+# Independent fit
+momentuMod2 <- fitHMM(data = prepSimCorrelated,
+                      nbStates = 3,
+                      dist = list(x = "weibull",
+                                  y = "norm"),
+                      Par0 = list(x = c(k0, lambda0),
+                                  y = c(mu0, sigma0))
+)
+manualMod2 <- fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0, delta0)
+# correlated fit
+manualMod3 <- fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
+                       delta0, independent = FALSE, covarianceMatrix = covMat) 
+
+
+
 
 
 hiddenStateSequence_weibullnormal <- function(step1, # Values in weibull observations
@@ -253,10 +278,12 @@ hiddenStateSequence_weibullnormal <- function(step1, # Values in weibull observa
   par0 <- c(par,  wGamma0, wDelta0)
   return(viterbi(step1, step2, par0))
 }
+# independent
+hiddenstates1 <- hiddenStateSequence_weibullnormal(y1, y2, c(mu0, sigma0, k0, lambda0), Gamma, delta)
+hiddenStatesMomentu1 <- viterbi(momentuMod1)
 
+hiddenStatesMomentu2 <- viterbi(momentuMod2)
+hiddenstates2 <- hiddenStateSequence_weibullnormal(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma, delta)
+hiddenstates3 <- hiddenStateSequence_weibullnormal(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma, delta, independent = FALSE,
+                                       covMat, eps = 0.0001)
 
-mean(hiddenStateSequence_weibullnormal(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma, delta) == s)
-
-
-mean(hiddenStateSequence_weibullnormal(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma, delta, independent = FALSE,
-                                       covMat, eps = 0.0001) == s)
