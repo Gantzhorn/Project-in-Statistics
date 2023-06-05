@@ -1,6 +1,13 @@
-\subsection{The golden eagle data }
-We will be fitting and 
-\subsection{Simulaing hidden markov models}
+Initially, we consider a somewhat naïve modelling of the golden eagle data.\cite{eagleData} The data contains $45.914$ observations of spatiotemporal information for $58$ total tracks divided into $599$ segments. We will use the variables: \texttt{Segment\_ID}, \texttt{Longitude}, \texttt{Latitude}, \texttt{Altitude}, \texttt{horizontal\_steps}. Consecutive observations are collected at one minute intervals. Although, the data has been tidied already, we will still do some minor wrangling; we calculate the difference in altitude between consecutive observations within segments. Obviously, by doing so we have to discard the first observation for each segment. This leaves us with $45.315$ observations. Apart from this there are no issues with the data, we depict simple information about the data in the appendix. Using the coordinates we depict the segments with coordinates in the north-eastern United States; the vast-majority of the data.
+\begin{figure}[h]
+    \begin{center}
+        \includegraphics[scale = .085]{figures/allBirdTracks.jpeg}
+        \caption{Longitude and latitude for the $44.730$ observations belonging to segments in the US.}
+    \end{center}
+\end{figure}
+\subsection{Fitting an HMM to the Golden eagle tracks}
+Having dealt with the initial 
+\subsection{Simulating hidden markov models}
 
 \subsection{Sampling correlated variables}\label{correlatedVariables}
 Now, we deviate from the regular hidden markov model by allowing correlation in the observed chain. We have independently developed a method of simulating correlated variables with any parameterized distribution in a similar manner to \cite{thomasWard}. In later applications we will use the weibull and gaussian distributions, but the following sampling procedure applies to any imaginable parameterized distribution.\\ Firstly, sample $(X_1, X_2)$ from a bivariate gaussian distribution with mean vector, $\xi = \mathbf{0}$ and covariance matrix 

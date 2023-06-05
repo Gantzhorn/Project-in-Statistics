@@ -1,3 +1,30 @@
+\section{Summary statistics and marginal distributions for the golden eagle data}
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{lllll}
+      \hline
+    \textbf{Statistic} &   \textbf{Longitude} &    \textbf{Latitude} & \textbf{horizontal\_steps} & \textbf{vertical\_steps} \\ 
+      \hline
+    Min. &   -80.47   & 38.91   &    0.226   & -2285.2101   \\ 
+      1st Quantile & -78.32   & 40.22   & 233.566   & -55.4587   \\ 
+      Median & -77.56   & 41.06   &  519.348   &    -0.3183   \\ 
+      Mean   & -77.31   & 41.00   & 566.544   & -0.9842   \\ 
+      3rd Quantile & -76.47   & 41.64   & 855.376   & 51.3704   \\ 
+      Max.   & -69.43   & 48.52   & 3807.510   & 996.1946   \\ 
+       \hline
+    \end{tabular}
+    \caption{Short summary statistics for the most important variables in the eagle data}
+    \label{tabularEagles}
+\end{table}
+\begin{figure}[h!]
+    \begin{center}
+        \includegraphics[scale = .175]{figures/horizontalAndVerticalDensities.jpeg}
+        \caption{Marginal densities for step lengths in both dimensions and their joint distribution}
+        \label{densityEagles}
+    \end{center}
+    
+\end{figure}
+\newpage
 \section{Finding the density of the Weibull-Gaussian distribution}\label{weibullGaussianAppendix}
 To find the density of the Weibull-Gaussian distribution, we let $(X_1, X_2)$ be bivariate gaussian with mean vector, $\xi = \mathbf{0}$ and covariance matrix $\Sigma = \begin{pmatrix}
     1 & \rho \\

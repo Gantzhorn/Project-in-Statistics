@@ -11,9 +11,12 @@ library(tidyverse)
 library(momentuHMM)
 library(ggmap)
 library(plotly)
+library(gridExtra)
 library(geodata)
 library(plot3D)
+library(grid)
 library(rayshader)
+library(xtable)
 library(sf)
 library(mapview)
 library(ggthemes)
@@ -21,6 +24,7 @@ theme_set(theme_bw())
 proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
                          "#F0E442", "#0072B2", "#D55E00",
                          "#CC79A7")
+plotPath = "/home/anders/Desktop/Skole/Blok 4 - 2023/Project in Statistics/Project-in-Statistics/latex/figures"
 ```
 
 # Analysis of eagle data
@@ -35,6 +39,87 @@ eagleData <- eagleData %>% group_by(Segment_ID) %>%
     mutate(vertical_steps = Altitude - lag(Altitude, default = first(Altitude))) %>% 
     rename(horizontal_steps = Step_length) %>% 
     slice(2:n())
+```
+
+# Plot the tracks of the birds
+```{r, echo = FALSE}
+allBirdsMap <- ggmap::get_stamenmap(bbox = c(left = min(eagleData$Longitude),
+                              right = -73,
+                              bottom = min(eagleData$Latitude),
+                              top = 43),
+                              maptype = "terrain-background",
+                              crop = FALSE,
+                              zoom = 9)
+USMAP <- ggmap::get_stamenmap(bbox = c(left = -125, right = -67, bottom = 24, top = 49),
+                              maptype = "terrain-background",
+                              crop = FALSE,
+                              zoom = 6)
+
+allBirdsMapZoomed <- ggmap(USMAP) + theme(axis.title = element_blank(), 
+          axis.text  = element_blank(),
+          axis.ticks = element_blank()) +
+  geom_rect(xmin = min(eagleData$Longitude), xmax =  -73, ymin =  min(eagleData$Latitude), ymax =  43,
+            fill = NA, color = "firebrick", linewidth = 0.6)
+rm(USMAP)
+allBirdsAndInset <- ggmap(allBirdsMap) +
+  geom_point(data = eagleData, aes(x = Longitude, y = Latitude, group = Segment_ID),
+             col = "black", size = 0.0001) +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14, face = "bold")) +
+  ggmap::inset(ggplotGrob(allBirdsMapZoomed), xmin = -76, xmax = -73, ymin = 38, ymax = 41.4) +
+  labs(x = "Longitude (°)", y = "Latitude (°)")
+allBirdsAndInset
+ggsave(filename = "allBirdTracks.jpeg", plot = allBirdsAndInset, path = plotPath, width = 12.26, height = 9.77)
+```
+
+# Simple summary statistics
+
+```{r, include = FALSE}
+eagleData %>% ungroup() %>% select(Longitude, Latitude, horizontal_steps, vertical_steps) %>% summary() %>% xtable(include.rownames = FALSE)
+
+horizontal_marginal <- eagleData %>% 
+  ggplot(aes(x = horizontal_steps)) +
+  geom_density(color = "black", fill = proj_palette[1], linewidth = 0.5) +
+  labs(y = NULL, x = "Horizontal Step Length") +
+  theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 12, face = "bold"),
+    panel.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  ) +  scale_x_log10()
+
+vertical_marginal <- eagleData %>% 
+  ggplot(aes(x = vertical_steps)) +
+  geom_density(color = "black", fill = proj_palette[2], linewidth = 0.5) +
+  labs(y = NULL, x = "Vertical Step Length") +
+  theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 12, face = "bold"),
+    panel.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+verticalHorizontal_joint <- ggplot(eagleData, aes(x = horizontal_steps, y = vertical_steps)) +
+  stat_density_2d(aes(fill = ..level..), geom = "polygon", colour = "white") +
+  scale_fill_gradientn(colors = c(proj_palette[1], proj_palette[5])) +
+  labs(x = "Horizontal Steplength", y = "Vertical Steplength", fill = "Density") + scale_x_log10() + 
+    theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 12, face = "bold"),
+    panel.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  ) +
+  guides(fill = guide_colorbar(title.position = "top", title.theme = element_text(face = "bold")))
+  
+
+marginalAndJointDistributions <- grid.arrange(verticalHorizontal_joint, horizontal_marginal, vertical_marginal,
+             layout_matrix = matrix(c(2, 2, 2, 2, 3, 3, 3, 3, NA, 1, 1 ,1, 1, 1, 1, NA), nrow = 2,byrow = TRUE))
+
+ggsave(filename = "horizontalAndVerticalDensities.jpeg", plot = marginalAndJointDistributions, path = plotPath)
 ```
 ## Estimation using Weibull- and Gamma distributions
 ### Weibull distribution
@@ -261,13 +346,6 @@ favoriteBirdMap <- ggmap::get_stamenmap(bbox = c(left = min(favourite_birdTibble
                               maptype = "terrain",
                               crop = FALSE,
                               zoom = 11)
-allBirdsMap <- ggmap::get_stamenmap(bbox = c(left = min(eagleData$Longitude),
-                              right = -73,
-                              bottom = min(eagleData$Latitude),
-                              top = 43),
-                              maptype = "terrain-background",
-                              crop = FALSE,
-                              zoom = 8)
 
 favoriteBirdMapAndTracks <- ggmap(favoriteBirdMap)+
   geom_line(data = favourite_birdTibble, aes(x = Longitude, y = Latitude),
@@ -284,22 +362,6 @@ favoriteBirdMapAndTracks <- ggmap(favoriteBirdMap)+
         legend.text = element_text(size = 10),
         legend.position = "bottom")
 favoriteBirdMapAndTracks
-```
-
-# Plot the tracks of the birds
-```{r}
-ggmap(allBirdsMap) +
-  geom_point(data = eagleData, aes(x = Longitude, y = Latitude, group = Segment_ID),
-            size = 0.0001, col = "black") + 
-  labs(title = "Most birds",
-       x = "Longitude",
-       y = "Latitude") +
-  theme(plot.title = element_text(size = 14, face = "bold"),
-        axis.text = element_text(size = 12),
-        axis.title = element_text(size = 12),
-        legend.title = element_text(size = 12, face = "bold"),
-        legend.text = element_text(size = 10),
-        legend.position = "bottom")
 ```
 ## Try plotting the tracks in 3D
 
