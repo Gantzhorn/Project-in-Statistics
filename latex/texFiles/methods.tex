@@ -24,16 +24,17 @@ Turning to the estimation itself, we opt for
 %     \end{pmatrix}  
 % \end{align}
 % which will be notationally useful to us in the derivation of the so-called forward algorithm. 
- maximum likelihood estimation as our method of choice. Using the notation $S = \{S_1,\dots, S_T\}$ and $\mathbf{y} = \{\mathbf{y}_1,\dots, \mathbf{y}_T\}$ with an HMM as described in the above, we get that the likelihood, $\mathcal{L}_T$, of observing a particular sequence is given be the law of total probability
+ maximum likelihood estimation as our method of choice. Using the notation $S = \{S_1,\dots, S_T\}$ and $\mathbf{y} = \{\mathbf{y}_1,\dots, \mathbf{y}_T\}$ with an HMM as described in the above, we get that the likelihood, $\mathcal{L}_T$, of observing a particular sequence is
 \begin{align}
     \mathcal{L}_T = \mathbb{P}(\mathbf{Y} = \mathbf{y}) = \sum_{S_1 = 1}^N\dots \sum_{S_T = 1}^N \mathbb{P}(\mathbf{Y} = \mathbf{y}, S)
 \end{align}
-By the markov property each term is
+by the law of total probability.
+Invoking the markov property lets us write each term as
 \begin{align}
     \mathbb{P}(\mathbf{Y} = \mathbf{y}, S) = \mathbb{P}(S_1)\prod_{t = 2}^T \mathbb{P}(S_t | S_{t-1})\prod_{t = 1}^T \mathbb{P}(\mathbf{Y}_t = \mathbf{y}_t | S_t) 
     \label{termsInLikelihood}
 \end{align}
-However, $\mathcal{L}_T$ is intractible even for relatively small values of $T$ and $N$. We are summing $N^T$ terms composed of $2T$ factors, whence the time complexity is $\mathcal{O}\left(N^TT\right)$. Now, by proposition 1 in section 2.3.2 \cite{HHMForTimesSeries} this can be drammatically simplified to
+However, computing $\mathcal{L}_T$ is intractible even for relatively small values of $T$ and $N$; we are summing $N^T$ terms composed of $2T$ factors giving a time complexity of $\mathcal{O}\left(N^TT\right)$. Now, by proposition 1 in section 2.3.2 \cite{HHMForTimesSeries} this can be drammatically simplified to
 \begin{align}
     \mathcal{L}_T = \delta\mathbb{P}(\mathbf{y}_1)\prod_{i = 1}^{t}\Gamma P(\mathbf{y}_t)\mathbf{1}
     \label{likelihoodOpt}
@@ -42,7 +43,7 @@ And via a recursive scheme
 \begin{align}
     \alpha_1 = \delta\mathbb{P}(\mathbf{y}_1), \quad \alpha_t = \alpha_{t-1}\Gamma\mathbb{P}(\mathbf{y}_1), t = 2,\dots, T
 \end{align}
- known as the forward algorithm, which can be computed with a complexity of $\mathcal{O}(N^2T)$, the likelihood is found as $\mathcal{L}_t = \alpha_T\mathbf{1}$.\\ To find estimates for the parameters in the model, we use a numerical maximizer to maximize (\ref{likelihoodOpt}) with respect to $\delta, \Gamma$ and $\Theta$. In addition, we will draw inference about the underlying hidden states using the algorithm known as the viteri algorithm. Section 5.3.2 \cite{HHMForTimesSeries}  derives this and the idea is basically the same as in the likelihood maximization part above. Use markov property of the model to devise a recursive scheme. In this instance we naturally maximize the probability $\mathbb{P}(S | \mathbf{Y})$, which by Bayes' theorem is equivalent to maximizing (\ref{termsInLikelihood}). In this case it is shown that the time complexity of the recursive scheme is $\mathcal{O}(NT)$.
+ known as the forward algorithm that can be computed with a complexity of $\mathcal{O}(N^2T)$, the likelihood is found as $\mathcal{L}_t = \alpha_T\mathbf{1}$.\\ To find estimates for the parameters in the model, we use a numerical maximizer to maximize (\ref{likelihoodOpt}) with respect to $\delta, \Gamma$ and $\Theta$. In addition, we will draw inference about the underlying hidden states using the algorithm known as the viterbi algorithm. Section 5.3.2 \cite{HHMForTimesSeries}  derives this and the idea is essentially the same as in the likelihood maximization part above. Use the markov property of the model to devise a recursive scheme. In this instance we naturally maximize the probability $\mathbb{P}(S | \mathbf{Y})$, which by Bayes' theorem is equivalent to maximizing (\ref{termsInLikelihood}). In this case it is shown that the time complexity of the recursive scheme is $\mathcal{O}(NT)$. \cite{HHMForTimesSeries}
 \subsection{Assessing the fit}
 When we have access to them i.e. when we simulate toy data, we will assess the fit via the ground truth parameters and the hidden state sequence. The Monte Carlo estimate is used as the probability that we correctly decode the state at any time $t$. In addition, we investigate the parameters of the observed states distributions for biases. However, when we do the actual modelling, we naturally do not have the ground truth. For this part we will draw from our experiences from the simulations, but we also consider the pseudo-residuals defined for the $k$th entry in our observed sequence at time $t$ as \cite{HHMForTimesSeries}
 \begin{align}

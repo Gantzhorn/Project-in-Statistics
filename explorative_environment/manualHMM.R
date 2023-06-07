@@ -1,5 +1,6 @@
 library(tidyverse)
 library(momentuHMM)
+theme_set(theme_bw())
 library(Rcpp)
 library(microbenchmark)
 library(Matrix)
@@ -77,7 +78,7 @@ gDensityVec <- function(x, y, k, lambda, mu, sigma, covarianceMatrix, eps) {
 ## Simulate realisations from a Markov chain
 
 N <- 3 # Number of states
-T <- 100 # Number of realisations
+T <- 1000 # Number of realisations
 delta <- c(1 / 3, 1 / 3, 1 / 3) # Initial distribution
 Gamma <- matrix(c(0.9, 0.05, 0.05, 0.05, 0.9, 0.05, 0.05, 0.05, 0.9), ncol = 3) # Transition probability matrix
 s <- rep(NA, times = T) # State vector
@@ -305,7 +306,7 @@ momentuMod2 <- fitHMM(data = prepSimCorrelated,
                       Par0 = list(x = c(k0, lambda0),
                                   y = c(mu0, sigma0))
 )
-manualMod2 <- fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0, delta0)
+manualMod2 <- fit_weibull_normal_hmmRcppDens(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0, delta0)
 # correlated fit
 manualMod3 <- fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
                        delta0, independent = FALSE, covarianceMatrix = covMat) 
@@ -378,8 +379,8 @@ hiddenStateSequence_weibullnormal <- function(step1, # Values in weibull observa
   }
   
   # Transform Gamma0 and delta0 to working scale
-  wGamma0 <- Gamma0[!diag(3)]
-  wDelta0 <- delta0[-3] / delta0[3]
+  wGamma0 <- Gamma[!diag(3)]
+  wDelta0 <- delta / delta[3]
   par0 <- c(par,  wGamma0, wDelta0)
   return(viterbi(step1, step2, par0))
 }
@@ -394,3 +395,88 @@ hiddenstates2 <- hiddenStateSequence_weibullnormal(X_prime, Y_prime, c(mu0, sigm
 hiddenstates3 <- hiddenStateSequence_weibullnormal(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma, delta, independent = FALSE,
                                        covMat, eps = 0.0001)
 
+# State probabilites
+logAlphaMove <- function(step1,step2,par,
+                         Gamma,delta)
+{
+  mu <- par[1:3]
+  sigma <- par[4:6]
+  shape <- par[7:9] 
+  scale <- par[10:12]
+  nbObs <- length(step1)
+  lalpha <- matrix(NA,nbObs,N)
+  # probabilities of observations conditional on state
+  allProbs <- matrix(1,nrow=nbObs,ncol=N)
+  
+  for(state in 1:3) {
+    step1Prob <- dweibull(step1,shape[state],scale[state])
+   
+    step2Prob <- dnorm(step2,mu[state],sigma[state])
+    # joint probability = step probability * angle probability - for now
+    allProbs[, state] <- step1Prob*step2Prob
+  }
+  lscale <- 0
+  v <- delta*allProbs[1,]
+  lalpha[1,] <- log(v)
+  for(t in 2:nbObs) {
+    v <- v%*%Gamma*allProbs[t,]
+    lscale <- lscale + log(sum(v))
+    v <- v/sum(v)
+    lalpha[t,] <- log(v) + lscale
+  }
+  return(lalpha)
+}
+
+# Implement a function for calculating pseudo residuals
+pseudoResiduals <- function(step1, # Values in weibull observations
+                          step2, # Values in normal observations
+                          par, # Concatenation of all fitted parameters
+                          Gamma, #Transition probability matrix
+                          delta, # Initial distribution
+                          independent = TRUE,
+                          covarianceMatrix = NULL,  # Specify if the data is assumed independent in the fitting
+                          eps = 0.001)
+{
+  nbObs <- length(step1)
+  nbStates <- N
+  pStep1Mat <- matrix(NA,nbObs,nbStates)
+  pStep2Mat <- matrix(NA,nbObs,nbStates)
+  step1Res <- rep(NA,nbObs)
+  step2Res <- rep(NA,nbObs)
+  
+  la <- logAlphaMove(step1, step2, par, Gamma, delta)
+  
+  mu <- par[1:3]
+  sigma <- par[4:6]
+  # Parameter for the Weibull distribution of the second observation vector
+  shape <- par[7:9] 
+  scale <- par[10:12]
+  
+  for(state in 1:nbStates) {
+    for(t in 1:nbObs) {
+      # Integrate weibull
+      pStep1Mat[t,state] <- pweibull(step1[t], shape[state], scale[state])
+      # Integrate normal
+      pStep2Mat[t,state] <- pnorm(step2[t], mean = mu[state], sd = sigma[state])
+    }
+  }
+  step1Res[1] <- qnorm(delta%*%pStep1Mat[1,])
+  step2Res[1] <- qnorm(delta%*%pStep2Mat[1,])
+  
+  for(t in 2:nbObs) {
+    c <- max(la[t-1,]) # cancels out below; prevents numerical errors
+    a <- exp(la[t-1,]-c)
+    
+    step1Res[t] <- qnorm(t(a)%*%(Gamma/sum(a))%*%pStep1Mat[t,])
+    step2Res[t] <- qnorm(t(a)%*%(Gamma/sum(a))%*%pStep2Mat[t,])
+  }
+  return(list(weibullResiduals=step1Res,normalResiduals=step2Res))
+}
+
+manualParametersIndependent <- c(manualMod1$mean_normal, manualMod1$sd_normal,
+                                 manualMod1$shape_weibull, manualMod1$scale_weibull)
+
+manualParametersCorrelated <- c(manualMod3Fast$mean_normal, manualMod3Fast$sd_normal,
+                                manualMod3Fast$scale_weibull, manualMod3Fast$scale_weibull)
+
+pseudoResiduals(y1, y2, manualParametersIndependent, manualMod1$Gamma, manualMod1$delta)
