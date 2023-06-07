@@ -100,6 +100,9 @@ simulate_HMM <- function(T = 500,
 simRes <- simulate_HMM(500, delta, Gamma,
                        dists = c("rweibull", "rnorm"),
                        list(c(k, lambda), c(mu, sigma)))
+
+tibble(t = seq_along(simRes$s), x = simRes$obs_mat[ ,1], y = simRes$obs_mat[, 2], s = factor(simRes$s)) %>%
+  ggplot(aes(x = t, y = y)) + geom_point(aes(col = s))
 # Fit model
 # Init values for mean and variance of gamma and normal
 lambda0 <- lambda

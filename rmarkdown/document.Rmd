@@ -38,7 +38,7 @@ eagleData %>% mutate(Segment_ID = factor(Segment_ID))
 eagleData <- eagleData %>% group_by(Segment_ID) %>%
     mutate(vertical_steps = Altitude - lag(Altitude, default = first(Altitude))) %>% 
     rename(horizontal_steps = Step_length) %>% 
-    slice(2:n())
+    slice(2:n()) %>% ungroup()
 ```
 
 # Plot the tracks of the birds
@@ -137,18 +137,18 @@ k_hat <- uniroot(function(k) {sum(eagleData$horizontal_steps^k * log(eagleData$h
                     c(0.1, 10))$root
 lambda_hat <- (mean(eagleData$horizontal_steps^k_hat))^(1/k_hat)
 ```
-### Gamma distribution
-MLE of shape parameter in gamma distribution is the solution to the equation:
-$$
-\log(\alpha)-\psi(\alpha) = \log\left(\frac{1}{N}\sum_{i=1}^N\log(X_i)\right)-\frac{1}{N}\sum_{i = 1}^N\log(X_i)
-$$
-Whereas the rate parameter is given by
-$$\hat{\beta} = \frac{\hat{\alpha}}{\sum_{i = 1}^N X_i}$$
+<!-- ### Gamma distribution -->
+<!-- MLE of shape parameter in gamma distribution is the solution to the equation: -->
+<!-- $$ -->
+<!-- \log(\alpha)-\psi(\alpha) = \log\left(\frac{1}{N}\sum_{i=1}^N\log(X_i)\right)-\frac{1}{N}\sum_{i = 1}^N\log(X_i) -->
+<!-- $$ -->
+<!-- Whereas the rate parameter is given by -->
+<!-- $$\hat{\beta} = \frac{\hat{\alpha}}{\sum_{i = 1}^N X_i}$$ -->
 
-```{r}
-alpha_hat <- uniroot(function(alpha) {log(alpha)-digamma(alpha)-log(mean(eagleData$horizontal_steps))+mean(log(eagleData$horizontal_steps))},c(0.1, 10))$root
-beta_hat <- alpha_hat/mean(eagleData$horizontal_steps)
-```
+<!-- ```{r} -->
+<!-- alpha_hat <- uniroot(function(alpha) {log(alpha)-digamma(alpha)-log(mean(eagleData$horizontal_steps))+mean(log(eagleData$horizontal_steps))},c(0.1, 10))$root -->
+<!-- beta_hat <- alpha_hat/mean(eagleData$horizontal_steps) -->
+<!-- ``` -->
 
 ### Fitting the vertical steps to a normal distribution
 The MLE of the mean in the normal distribution is:
@@ -157,7 +157,7 @@ $$
 $$
 Whereas the variance is:
 $$
-\hat{\sigma}² = \frac{1}{N}\sum_{i = 1}^N \left(X_i-\hat{\mu}\right)^2
+\hat{\sigma}^2 = \frac{1}{N}\sum_{i = 1}^N \left(X_i-\hat{\mu}\right)^2
 $$
 Which we implement.
 ```{r message = FALSE}

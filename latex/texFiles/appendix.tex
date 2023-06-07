@@ -13,7 +13,7 @@
       Max.   & -69.43   & 48.52   & 3807.510   & 996.1946   \\ 
        \hline
     \end{tabular}
-    \caption{Short summary statistics for the most important variables in the eagle data}
+    \caption{Short statistics from R's summary command for the most important variables in the eagle data}
     \label{tabularEagles}
 \end{table}
 \begin{figure}[h!]
@@ -22,6 +22,36 @@
         \caption{Marginal densities for step lengths in both dimensions and their joint distribution\\ Note that the axes depicting the horizontal steps are shown on a logarithmic scale}
         \label{densityEagles}
 \end{figure}
+\newpage
+\section{Correlated data auxilliary results}\label{simWeibullGaussian}
+\subsection{Simulation study}
+For varying levels of correlation $\rho$ in the bivariate normal we simulate $2.500$ gaussian weibull variables with $k=2, \; \lambda = 5, \; \mu = 4, \; \sigma = 3$. For each correlation we use MLE to estimate the parameters. Additionaly, we find the Monte Carlo estimate for the correlation of the weibull-gaussian data, $\hat{\rho}_{prev}$
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{rrrrrr}
+          \hline
+          $\rho$ & $\hat{k}$ & $\hat{\lambda}$ & $\hat{\mu}$ & $\hat{\sigma}$ & $\hat{\rho}_{prev}$\\ 
+          \hline
+        -0.9 & 2.016813 & 4.999784 & 4.0 & 3.0 & -0.886736 \\ 
+          -0.45 & 1.990909 & 5.000908 & 4.0& 3.0 & -0.443799 \\ 
+          -0.1 & 1.993609 & 4.999045 & 4.0 & 3.0 & -0.100261 \\ 
+          0.9 & 2.000166 & 5.001516 & 4.0 & 3.0 & 0.889852 \\ 
+          0.45 & 2.000223 & 5.001611 & 4.0 & 3.0 & 0.440810 \\ 
+          0.1 & 2.015213 & 5.002888 & 4.0 & 3.0 & 0.101309 \\ 
+           \hline
+        \end{tabular}
+    \caption{Estimated parameters the simulated data}
+    \label{correlationTable}
+\end{table}\\
+We plot the joint - and marginal distributions for the data in table \ref{correlationTable}.
+\begin{figure}[h!]
+        \begin{center}
+        \includegraphics[scale = .225]{figures/correlatedWeibullNormalSim.jpeg}
+        \caption{joint - and marginal distributions for the data in table \ref{correlationTable} with negative correlation in the first row and positive in the second row}
+    \end{center}
+\end{figure}
+
+\subsection{Imitated eagle data}
 \newpage
 \section{Finding the density of the Weibull-Gaussian distribution}\label{weibullGaussianAppendix}
 To find the density of the Weibull-Gaussian distribution, we let $(X_1, X_2)$ be bivariate gaussian with mean vector, $\xi = \mathbf{0}$ and covariance matrix $\Sigma = \begin{pmatrix}
@@ -60,3 +90,30 @@ Differentiating and setting into the definition of the jacobian yields:
     J(y_1, y_2) = \frac{k\left(\frac{y_2}{\lambda}\right)^ke^{-\left(\frac{y_2}{\lambda}\right)^k}}{\varphi\left(\Phi^{-1}\left(1-e^{-\left(\frac{y_2}{\lambda}\right)^k}\right)\right)y_2\sigma }    
 \end{align}
 where $\varphi$ is the density of the standard normal distribution. We can then obtain the density by combining above formulae.
+\newpage
+\section{Benchmark for various implementations}
+In the section we show the results of various benchmarks using \cite{microbenchmark}. The implementations were run with the following hardware and software.
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{ll}
+      \hline
+      \textbf{Specification} & \textbf{Description} \\
+      \hline
+      Processor (CPU) & Intel i7-4800MQ (8) @ 3.700GHz \\
+      RAM & 16 GB \\
+      Operating System & Linux Mint 21.1 x86\_64 \\
+      Storage & 500 GB SSD \\
+      Graphics Card (GPU) & Intel 4th Gen Core Processor \\
+      Compiler and Software & R 4.3.0 with C++ compiler g++ 11.3.0\\
+      \hline
+    \end{tabular}
+  \end{table}
+  
+\subsection{Markov chain sampler}
+We compare the two markov chain samplers
+\begin{figure}[h!]
+    \centering
+    \includegraphics[scale = .15]{figures/markovChainSamplers.jpeg}
+    \caption{The basic R markov chain sampler compared to more sophisticated C++ implementation}
+    \label{markovChainRvRcpp}
+\end{figure} 
