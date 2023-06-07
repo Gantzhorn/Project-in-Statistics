@@ -9,17 +9,22 @@ A hidden markov model consists of two stochastic processes: The state process, $
         \gamma_{N1} & \dots & \gamma_{NN}
     \end{pmatrix} \label{Gamma1}
 \end{align}
-that is $\gamma_{ij}$ is the probability of jumping from state $i$ to state $j$. We assume that the chain has the markov property. That is $\gamma_{ij} = \mathbb{P}\left(S_{t+1} = j | S_t = i\right)$. Now, the observed process depends on the value of the state process in that it is drawn from some parametric distributions in which the parameters depend on the specific state at time $t$.
-A common working assumption is that the observed process is conditionally indepedent given the state at time $t$. 
-\cite{UncoveringEcologicalState}. This allows us to organize the state-dependent distributions $\mathbb{P}(\mathbf{Y}_t)$ in the following matrix
-\begin{align}
-    \mathbb{P}(\mathbf{Y}_t) = \begin{pmatrix}
-        P(\mathbf{Y}_t | S_t = 1) & \dots &  0 \\
-        \vdots & \ddots & \vdots \\
-        0 & \dots & P(\mathbf{Y}_t | S_t = N)
-    \end{pmatrix}  
+that is $\gamma_{ij}$ is the probability of jumping from state $i$ to state $j$. We assume that the chain has the markov property. That is $\gamma_{ij} = \mathbb{P}\left(S_{t+1} = j | S_t = i\right)$. Now, the observed process depends on the value of the state process in that it is drawn from some parametric distributions in which the parameters, $\Theta$, depend on the specific state at time $t$.
+A common working assumption is that the observed process is conditionally independent given the state at time $t$.\cite{UncoveringEcologicalState}. That is, say we observe $\mathbf{Y}_t\in\mathbb{R}^d$, then we get the factorization
+\begin{align}\mathbb{P}(\mathbf{Y}_t | S_t) = \prod_{i = 1}^{d} \mathbb{P}(Y_t^{(i)} | S_t)
 \end{align}
-which will be notationally useful to us in the derivation of the so-called forward algorithm. Our estimation method of choice is maximum likelihood estimation. Using the notation $S = \{S_1,\dots, S_T\}$ and $\mathbf{y} = \{\mathbf{y}_1,\dots, \mathbf{y}_T\}$ with an HMM as described in the above, we get that the likelihood, $\mathcal{L}_T$, of observing a particular sequence is given be the law of total probability
+Where the superscript refers to the entry in the observed vector. This property is not vital to the following, however it makes practical implementations of the likelihood much easier, whenever we are dealing with observed sequences of two our more variables.
+Turning to the estimation itself, we opt for  
+%  This allows us to organize the state-dependent distributions $\mathbb{P}(\mathbf{Y}_t)$ in the following matrix
+% \begin{align}
+%     \mathbb{P}(\mathbf{Y}_t) = \begin{pmatrix}
+%         P(\mathbf{Y}_t | S_t = 1) & \dots &  0 \\
+%         \vdots & \ddots & \vdots \\
+%         0 & \dots & P(\mathbf{Y}_t | S_t = N)
+%     \end{pmatrix}  
+% \end{align}
+% which will be notationally useful to us in the derivation of the so-called forward algorithm. 
+ maximum likelihood estimation as our method of choice. Using the notation $S = \{S_1,\dots, S_T\}$ and $\mathbf{y} = \{\mathbf{y}_1,\dots, \mathbf{y}_T\}$ with an HMM as described in the above, we get that the likelihood, $\mathcal{L}_T$, of observing a particular sequence is given be the law of total probability
 \begin{align}
     \mathcal{L}_T = \mathbb{P}(\mathbf{Y} = \mathbf{y}) = \sum_{S_1 = 1}^N\dots \sum_{S_T = 1}^N \mathbb{P}(\mathbf{Y} = \mathbf{y}, S)
 \end{align}
@@ -28,16 +33,24 @@ By the markov property each term is
     \mathbb{P}(\mathbf{Y} = \mathbf{y}, S) = \mathbb{P}(S_1)\prod_{t = 2}^T \mathbb{P}(S_t | S_{t-1})\prod_{t = 1}^T \mathbb{P}(\mathbf{Y}_t = \mathbf{y}_t | S_t) 
     \label{termsInLikelihood}
 \end{align}
-However, computing $\mathcal{L}_T$ is quite intractible even for relatively small values of $T$ and $N$. Where are summing $N^T$ terms composed of $2T$ factors, whence the time complexity is $\mathcal{O}\left(N^TT\right)$. Now, by proposition 1 in section 2.3.2 \cite{HHMForTimesSeries} this can be drammatically simplified to
+However, $\mathcal{L}_T$ is intractible even for relatively small values of $T$ and $N$. We are summing $N^T$ terms composed of $2T$ factors, whence the time complexity is $\mathcal{O}\left(N^TT\right)$. Now, by proposition 1 in section 2.3.2 \cite{HHMForTimesSeries} this can be drammatically simplified to
 \begin{align}
     \mathcal{L}_T = \delta\mathbb{P}(\mathbf{y}_1)\prod_{i = 1}^{t}\Gamma P(\mathbf{y}_t)\mathbf{1}
     \label{likelihoodOpt}
 \end{align}
-And via a recursive scheme known as the forward algorithm, this can be computed with a complexity of $\mathcal{O}(N^2T)$. To find estimates for the parameters in the model, we use a numerical maximizer to maximize (\ref{likelihoodOpt}) with respect to $\delta, \Gamma$ and the parameters of $P(\mathbf{Y}_1)$. In addition, we will draw inference about the underlying hidden states using the algorithm known as the viteri algorithm. Section 5.3.2 \cite{HHMForTimesSeries}  derives this and the idea is basically the same as in the likelihood maximization part above. Use the conditional independence- and markov properties of the model to devise a recursive scheme. In this instance we naturally maximize the probability $\mathbb{P}(S | \mathbf{Y})$, which by Bayes' theorem is equivalent to maximizing (\ref{termsInLikelihood}). In this case it is shown that the time complexity of the recursive scheme is $\mathcal{O}(NT)$.
+And via a recursive scheme
+\begin{align}
+    \alpha_1 = \delta\mathbb{P}(\mathbf{y}_1), \quad \alpha_t = \alpha_{t-1}\Gamma\mathbb{P}(\mathbf{y}_1), t = 2,\dots, T
+\end{align}
+ known as the forward algorithm, which can be computed with a complexity of $\mathcal{O}(N^2T)$, the likelihood is found as $\mathcal{L}_t = \alpha_T\mathbf{1}$.\\ To find estimates for the parameters in the model, we use a numerical maximizer to maximize (\ref{likelihoodOpt}) with respect to $\delta, \Gamma$ and $\Theta$. In addition, we will draw inference about the underlying hidden states using the algorithm known as the viteri algorithm. Section 5.3.2 \cite{HHMForTimesSeries}  derives this and the idea is basically the same as in the likelihood maximization part above. Use markov property of the model to devise a recursive scheme. In this instance we naturally maximize the probability $\mathbb{P}(S | \mathbf{Y})$, which by Bayes' theorem is equivalent to maximizing (\ref{termsInLikelihood}). In this case it is shown that the time complexity of the recursive scheme is $\mathcal{O}(NT)$.
 \subsection{Assessing the fit}
 When we have access to them i.e. when we simulate toy data, we will assess the fit via the ground truth parameters and the hidden state sequence. The Monte Carlo estimate is used as the probability that we correctly decode the state at any time $t$. In addition, we investigate the parameters of the observed states distributions for biases. However, when we do the actual modelling, we naturally do not have the ground truth. For this part we will draw from our experiences from the simulations, but we also consider the pseudo-residuals defined for the $k$th entry in our observed sequence at time $t$ as \cite{HHMForTimesSeries}
 \begin{align}
     r_t^{(k)} = \Phi^{-1}\left(\mathbb{P}\left(Y_t^{(k)} \leq y_t^{(k)}\right)\right) = \Phi^{-1}\left(u_t^{(k)}\right)
 \end{align}
 The implementation of which is done analagously to momentuHMM \cite{momentuHMM}.
-By invoking the quantile transformation theorem twice we see that if the model is correctly specified then $u_t^{(k)}\sim \mathcal{U}(0,1)$ and thus $r_t^{(k)}\sim\mathcal{N}\left(0,1\right)$. We prefer the gaussian pseudo-residuals to the uniform, due to it being way easier to detect outliers in this distribution. On top of this we do a 
+By invoking the quantile transformation theorem twice we see that if the model is correctly specified then $u_t^{(k)}\sim \mathcal{U}(0,1)$ and thus $r_t^{(k)}\sim\mathcal{N}\left(0,1\right)$. We prefer the gaussian pseudo-residuals to the uniform, due to them allowing us to more easily detect outliers being way easier to detect outliers. On top of this, the residuals are independent, which we check through autocorrelation and plots of the value of the residuals over time. In addition, we test for the gaussianity be means of the Jarque-Bera test defined as
+\begin{align}
+    JB = \frac{n}{6}\left(\frac{\hat{\mu}_3^2}{\hat{\sigma}^6}+\frac{1}{4}\left(\frac{\hat{\mu}_4}{\hat{\sigma}^4}-3\right)^2\right)
+\end{align}
+Where $\hat{\mu_3}, \hat{\mu_4}$ are the Monte carlo estimates of the third- and fourth central moments respectively, whereas $\hat{\sigma}$ is the monte carlo estimate of the standard deviation. Asymptotically, this has a $\chi_2^2$-distribution; large values results in us rejecting the gaussianity of the samples.\cite{tseries}

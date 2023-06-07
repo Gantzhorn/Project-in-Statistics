@@ -157,7 +157,7 @@ $$
 $$
 Whereas the variance is:
 $$
-\hat{\mu} = \frac{1}{N}\sum_{i = 1}^N \left(X_i-\hat{\mu}\right)^2
+\hat{\sigma}² = \frac{1}{N}\sum_{i = 1}^N \left(X_i-\hat{\mu}\right)^2
 $$
 Which we implement.
 ```{r message = FALSE}

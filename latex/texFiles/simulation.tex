@@ -1,12 +1,17 @@
-Initially, we consider a somewhat naïve modelling of the golden eagle data.\cite{eagleData} The data contains $45.914$ observations of spatiotemporal information for $58$ total tracks divided into $599$ segments. We will use the variables: \texttt{Segment\_ID}, \texttt{Longitude}, \texttt{Latitude}, \texttt{Altitude}, \texttt{horizontal\_steps}. Consecutive observations are collected at one minute intervals. Although, the data has been tidied already, we will still do some minor wrangling; we calculate the difference in altitude between consecutive observations within segments. Obviously, by doing so we have to discard the first observation for each segment. This leaves us with $45.315$ observations. Apart from this there are no issues with the data, we depict simple information about the data in the appendix. Using the coordinates we depict the segments with coordinates in the north-eastern United States; the vast-majority of the data.
+Initially, we consider an elemantary hidden markov model on the golden eagle data.\cite{eagleData} The data contains $45.914$ observations of spatiotemporal information for $58$ total tracks divided into $599$ segments. We will use the variables: \texttt{Segment\_ID}, \texttt{Longitude}, \texttt{Latitude}, \texttt{Altitude}, \texttt{horizontal\_steps}. Consecutive observations are collected at one minute intervals. Although, it has has been tidied already, we will still do some minor data wrangling; we calculate the difference in altitude between consecutive observations within segments. Obviously, by doing so we have to discard the first observation for each segment. This leaves us with $45.315$ observations. Apart from this we see no issues with the data: We present summary statistics and density plots of the variables above in appendix \ref{summarStatistics} and there are no unrealistic- og missing values.\\ Using the coordinates we depict the segments with coordinates in the north-eastern United States; the vast-majority of the observations.
 \begin{figure}[h]
     \begin{center}
         \includegraphics[scale = .085]{figures/allBirdTracks.jpeg}
         \caption{Longitude and latitude for the $44.730$ observations belonging to segments in the US.}
     \end{center}
 \end{figure}
-\subsection{Fitting an HMM to the Golden eagle tracks}
-Having dealt with the initial 
+\subsection{Fitting an HMM to the Golden eagle segments}
+Having dealt with the exploratory analysis of the eagle data, we commence the modelling part. We used a weibull distribution for the horizontal steps and a normal distribution for the vertical steps. An our assumption was that the eagles had three behavioural states. In sum, $X_t \sim \mathcal{W}(k_i, \lambda_i), \; Y_t \sim \mathcal{N}(\mu_i, \sigma_i^2), \; i = 1,2,3$. For the fitting we of course  had to pick some starting values for $(k_i, \lambda_i, \mu_i, \sigma_i^2)$. As with any numerical maximization problem, this was primarily based on heuristics. We tried a few different strategies, however, we will mostly discuss initialization based on the maximum likelihood estimates. For our observed states these are given by\cite{Cohen1965}
+\begin{align}
+    \hat{\mu} &= \frac{1}{N}\sum_{i = 1}^N x_i, \quad \hat{\sigma}^2 = \frac{1}{N}\sum_{i = 1}^N \left(x_i-\hat{\mu}\right)^2\\
+    \frac{1}{N}\sum_{i = 1}^N \log(y_i)&= \frac{\sum_{i = 1}^N y_i^k\log(y_i)}{\sum_{i = 1}^N y_i^k} - \frac{1}{k} \label{kMLE} \\  \hat{\lambda} &= \left(\frac{1}{N} \sum_{i = 1}^N y_i^{\hat{k}}\right)^{\frac{1}{\hat{k}}}
+\end{align}
+Where the MLE for $k$ is the solution to (\ref{kMLE}). We also tried seperating the data by means of k-means clustering \cite{RLang} and then using the above heuristic on each cluster.
 \subsection{Simulating hidden markov models}
 
 \subsection{Sampling correlated variables}\label{correlatedVariables}
