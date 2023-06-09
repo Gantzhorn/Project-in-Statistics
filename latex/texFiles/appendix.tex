@@ -23,8 +23,8 @@
         \label{densityEagles}
 \end{figure}
 \newpage
-\section{Correlated data auxilliary results}\label{simWeibullGaussian}
-\subsection{Simulation study}
+\section{Correlated data auxiliary results}\label{simWeibullGaussian}
+\subsection{Simulation study}\label{simstudyappendix}
 For varying levels of correlation $\rho$ in the bivariate normal we simulate $2.500$ gaussian weibull variables with $k=2, \; \lambda = 5, \; \mu = 4, \; \sigma = 3$. For each correlation we use MLE to estimate the parameters. Additionaly, we find the Monte Carlo estimate for the correlation of the weibull-gaussian data, $\hat{\rho}_{prev}$
 \begin{table}[ht]
     \centering
@@ -47,12 +47,42 @@ We plot the joint - and marginal distributions for the data in table \ref{correl
 \begin{figure}[h!]
         \begin{center}
         \includegraphics[scale = .225]{figures/correlatedWeibullNormalSim.jpeg}
-        \caption{joint - and marginal distributions for the data in table \ref{correlationTable} with negative correlation in the first row and positive in the second row}
+        \caption{Joint - and marginal distributions for the data in table \ref{correlationTable} with negative correlation in the first row and positive in the second row}
     \end{center}
     \label{correlationDensities}
 \end{figure}
 
 \subsection{Imitated eagle data}
+This section shows analagously to appendix \ref{simstudyappendix} the results of altering the correlation in the eagle data. This was done like explained in section \ref{eagleImitation}. Using the same values as in appendix \ref{simstudyappendix}. The sampling resulted in the monte-carlo estimates, $\hat{\rho}$ for the correlation of $\rho$.
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{rrr}
+      \hline
+     & $\rho$ & $\hat{\rho}$ \\ 
+      \hline
+    1 & -0.900000 & -0.706768 \\ 
+      2 & -0.450000 & -0.458117 \\ 
+      3 & -0.100000 & -0.276326 \\ 
+      4 & 0.900000 & 0.269978 \\ 
+      5 & 0.450000 & 0.024760 \\ 
+      6 & 0.100000 & -0.167893 \\ 
+       \hline
+    \end{tabular}
+    \caption{Estimated correlation in the altered eagle data based on $\rho$.}
+    \label{correlatedEagleTable}
+    \end{table}
+
+    \begin{figure}[h!]
+        \begin{center}
+        \includegraphics[scale = .15]{figures/correlatedEaglesSim.jpeg}
+        \caption{Joint - and marginal distributions for the data in table \ref{correlatedEagleTable} with negative correlation in the first row and positive in the second row}
+    \end{center}
+    \label{correlationEagleDensities}
+\end{figure}
+\newpage
+\section{Findings auxilliary results}\label{auxiliaryResultsModelling}
+This part shows different additional plots and graphs found in the modelling and simulations. 
+\subsection{Fitting an HMM to the Golden eagle segments}\label{goldenEagleSegments}
 \newpage
 \section{Finding the density of the Weibull-Gaussian distribution}\label{weibullGaussianAppendix}
 To find the density of the Weibull-Gaussian distribution, we let $(X_1, X_2)$ be bivariate gaussian with mean vector, $\xi = \mathbf{0}$ and covariance matrix $\Sigma = \begin{pmatrix}

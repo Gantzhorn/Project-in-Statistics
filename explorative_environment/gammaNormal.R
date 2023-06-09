@@ -215,7 +215,7 @@ ggplot() + #geom_point(data = eagleData, mapping = aes(x = horizontal_steps, y =
 clusters <- stats::kmeans(data.frame(x = eagleData$horizontal_steps,
                                      y = eagleData$vertical_steps), centers = N)$cluster
 
-# eagleDataCluster <- tibble(eagleData, clusters = clusters) %>% mutate(clusters = factor(clusters))
+eagleDataCluster <- tibble(eagleData, clusters = clusters) %>% mutate(clusters = factor(clusters))
 # 
 # eagleDataCluster %>% ggplot(aes(x = vertical_steps, fill = clusters)) + geom_density()
 # tibble(eagleData, clusters = factor(stats::kmeans(eagleData$vertical_steps, centers = N)$cluster)) %>%

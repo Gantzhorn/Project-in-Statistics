@@ -1,1 +1,43 @@
-\subsection{Fitting hidden markov models}
+In this section, we present the results obtained from the modelling and simulation. The results are presented in the same order as they were originally explained.
+\subsection{Fitting an HMM to the Golden eagle segments}
+Firstly, the simple fitting with the \texttt{momentuHMM}-package had better results, when we initialized with just the maximum likelihood estimate for the entire data rather than stratifiying the data according to k-means and then do the calculations. The maximum likelihood estimates were $-576614.8$ and $-576615.8$ respectively. Recall, that the scale of these is non-interpretable. That means that although the numbers themselves are quite close relatively speaking, the difference in the model might be quite significant. As they come from the same probability distribution, the likelihood is comparable. Therefore our initial model becomes the one with the simple initialization strategy. We present the results of the fitted model as well as the standard errors of the estimates
+\begin{align}
+    \hat{\Gamma} &= \begin{pmatrix}
+    8.32 \cdot 10^{-1} (3.52 \cdot 10^{-3}) & 1.68 \cdot 10^{-1} (3.53 \cdot 10^{-3}) & 1.90 \cdot 10^{-4} (1.79 \cdot 10^{-4})\\
+    1.32 \cdot 10^{-1} (3.07 \cdot 10^{-3}) & 8.51 \cdot 10^{-1} (3.24 \cdot 10^{-3}) & 1.68 \cdot 10^{-2} (9.32 \cdot 10^{-4})\\
+    3.11 \cdot 10^{-8} (1.19 \cdot 10^{-7}) & 5.64 \cdot 10^{-2} (4.13 \cdot 10^{-3}) & 9.44 \cdot 10^{-1} (4.13 \cdot 10^{-3})\\
+    \end{pmatrix}\\
+    \hat{\delta} &= \begin{pmatrix}
+        2.24 \cdot 10^{-1} (3.07 \cdot 10^{-2}) &
+        6.53 \cdot 10^{-1} (3.34 \cdot 10^{-2}) &
+        1.23 \cdot 10^{-1} (1.51 \cdot 10^{-2})
+    \end{pmatrix}^\top
+    \end{align}
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{rrrr}
+        \hline
+        & \textbf{State 1} & \textbf{State 2} & \textbf{State 3} \\
+        \hline
+        $\hat{k}$ & 3.39 (0.03) & 1.74 (0.01) & 1.02 (0.02) \\
+        $\hat{\lambda}$ & 1037.24 (3.81) & 419.00 (3.04) & 19.66 (0.40) \\
+        $\hat{\mu}$ & -40.00 (0.92) & 30.11 (0.63) & -1.39 (0.45) \\ 
+        $\hat{\sigma}$ & 104.80 (0.69) & 78.72 (0.49) & 28.11 (0.45) \\ 
+        \hline
+    \end{tabular}
+    \caption{Table of estimates and standard errors for the parameters of the observed state distributions}
+\end{table}\\
+Decoding with the viterbi-algorithm yields an absolute- and proportionate distribution of each state
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{ccc}
+        \hline
+        \textbf{State} & \textbf{Observations} & \textbf{Proportion} \\
+        \hline
+        1 & 17973 & 0.397 \\
+        2 & 23223 & 0.512 \\
+        3 & 4119 & 0.0909 \\
+        \hline
+    \end{tabular}
+    \caption{Number of observations in each state and their proportion of the total number of states.}
+\end{table}

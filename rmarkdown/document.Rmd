@@ -15,9 +15,11 @@ library(gridExtra)
 library(geodata)
 library(plot3D)
 library(grid)
+library(ggExtra)
 library(rayshader)
 library(xtable)
 library(sf)
+library(rmutil)
 library(mapview)
 library(ggthemes)
 theme_set(theme_bw())
@@ -380,4 +382,270 @@ fig <- fig %>% layout(scene = list(xaxis = list(title = 'Longitude'),
                      zaxis = list(title = 'Altitude')))
 fig
 ```
+
+# Investigate consequences of the correlation between the states
+
+```{r}
+obsPerAnimal <- as.numeric(table(prepEagleData$ID))
+simNewEagles <- function(obsPerAnimal){
+statesForSim <- rep(0, nrow(eagleFit1$data))
+k <- 0
+for (i in seq_along(obsPerAnimal)){
+  statesForSim[k+1] <- sample.int(N, 1, prob = eagleFit1$mle$delta[1,])
+  for(j in 2:obsPerAnimal[i]){
+    statesForSim[j+k] <- sample.int(N, 1, prob = eagleFit1$mle$gamma[statesForSim[j+k-1], ])
+  }
+  k <- obsPerAnimal[i]+k
+}
+return(statesForSim)
+}
+weibullParameters <- matrix(c(eagleFit1$mle[[1]][1, ],
+                              eagleFit1$mle[[1]][2, ]), ncol = N, byrow = TRUE)
+normalParameters <- matrix(c(eagleFit1$mle[[2]][1, ],
+                             eagleFit1$mle[[2]][2, ]), ncol = N, byrow = TRUE)
+
+```
+
+```{r}
+# Fit similar data
+
+statesForSim <- simNewEagles(obsPerAnimal)
+covMatEagle <- matrix(c(1, 0.9,
+                        0.9, 1), ncol = 2,
+                      byrow = TRUE)
+
+
+bivariateNormEagle = MASS::mvrnorm(n=nrow(eagleFit1$data), mu=c(0, 0),
+                                   Sigma=covMatEagle, empirical=TRUE)
+X = bivariateNormEagle[, 1]
+Y = bivariateNormEagle[, 2]
+
+weibullNormalEagle <- tibble(horizontal_steps = qweibull(pnorm(X, 0, sqrt(covMatEagle[2,2])),
+                                                shape = weibullParameters[1, ][statesForSim],
+                                                scale = weibullParameters[2, ][statesForSim]),
+                             vertical_steps = Y*normalParameters[2, ][statesForSim]+normalParameters[1, ][statesForSim],state = factor(statesForSim))
+
+# combinedEagleData <- bind_rows(
+#   mutate(select(eagleData, horizontal_steps, vertical_steps), Source = "Observed"),
+#   mutate(select(weibullNormalEagle, horizontal_steps, vertical_steps), Source = "Imitated")
+# ) %>% mutate(Source = as.factor(Source))
+
+# Plot the densities with facetting
+# ggplot(pivot_longer(data = combinedEagleData, cols = -Source, names_to = "variable", values_to = "value"),
+#        aes(x = value, color = Source)) +
+#   geom_density(linewidth = 2) +
+#   facet_wrap(~ variable, ncol = 1, scales = "free") +
+#   labs(x = "", y = "Density", fill = "") +
+#   scale_color_manual(values = c("Observed" = proj_palette[1], "Imitated" = proj_palette[2]))
+
+# ggplot(combinedEagleData, aes(x = horizontal_steps, y = vertical_steps)) +
+#   stat_density_2d(aes(fill = ..level..), geom = "polygon", colour="white") +
+#   facet_wrap(~Source, ncol = 1) +
+#   labs(x = "Horizontal Steps", y = "Vertical Steps") + scale_fill_gradient(low = proj_palette[1], high = proj_palette[2]) + scale_x_log10()
+
+```
+
+
+```{r}
+set.seed(1)
+rhos <- c(-0.9, -0.45, -0.1, 0.9, 0.45, 0.1)
+# rhos<- seq(-0.95, 0.95, length.out = 20)
+
+#eagleCorrelation <- list()
+cor_vec <- numeric(length(rhos))
+for (i in seq_along(rhos)) {
+  rho1 <- rhos[i]
+  statesForSim <- simNewEagles(obsPerAnimal)
+  covMat <- matrix(c(1, rho1, rho1, 1), nrow = 2)
+  norm_2d <- MASS::mvrnorm(nrow(eagleData), mu = c(0, 0), Sigma = covMat, empirical = TRUE)
+  
+  X <- norm_2d[, 1]
+  Y <- norm_2d[, 2]
+  
+weibullNormalEagle <- tibble(horizontal_steps = qweibull(pnorm(X, 0, sqrt(covMatEagle[2,2])),
+                                                shape = weibullParameters[1, ][statesForSim],
+                                                scale = weibullParameters[2, ][statesForSim]),
+                             vertical_steps = Y*normalParameters[2, ][statesForSim]+normalParameters[1, ][statesForSim],state = factor(statesForSim))
+
+  cor_vec[i] <- cor(weibullNormalEagle$horizontal_steps, weibullNormalEagle$vertical_steps)
+
+  p <- ggplot(weibullNormalEagle#tibble(x = weibullNormalEagle$horizontal_steps[eagleData$Segment_ID < 300],
+               #      y = weibullNormalEagle$vertical_steps[eagleData$Segment_ID < 300]),
+                     ,aes(x = horizontal_steps, y = vertical_steps)) +
+    geom_point(alpha = 0.1, color = proj_palette[1]) +
+    labs(x = if(rho1>0){expression(bold(Z1))} else{""}, y = if(abs(rho1)==0.9){(expression(bold(Z2)))} else{""}) +
+    theme(axis.title = element_text(face = "bold"))
+
+
+  eagleCorrelation[[as.character(rho1)]] <- ggMarginal(p, fill = proj_palette[2])
+}
+
+# Create a data frame with the values
+parameter_results <- tibble(rhos, cor_vec)
+
+# Convert the data frame to an xtable object
+xtable_table <- xtable(parameter_results, digits = 6)
+
+plot(grid.arrange(grobs = eagleCorrelation, ncol = 3))
+
+ggsave(filename = "correlatedEaglesSim.jpeg", plot = grid.arrange(grobs = eagleCorrelation, ncol = 3),
+       path = plotPath)
+```
+
+## Now fit the original model to the simulated data
+```{r}
+prepweibullNormalEagle <- momentuHMM::prepData(data = data.frame(ID = eagleData$Segment_ID,
+                                       vertical_steps = weibullNormalEagle$vertical_steps,
+                                       horizontal_steps = weibullNormalEagle$horizontal_steps),
+                                       coordNames = NULL)
+
+eagleFit2 <- momentuHMM::fitHMM(prepweibullNormalEagle,
+                   nbStates = N,
+                   dist = list(horizontal_steps = "weibull",
+                          vertical_steps = "norm"),
+                   Par0 = list(horizontal_steps = c(k0, lambda0),
+                          vertical_steps = c(mu0, sigma0))
+)
+
+decodedStatesFit2 <- viterbi(m = eagleFit2)
+
+statesForSim[decodedStatesFit2 == statesForSim] %>% table()
+```
+
+```{r, include = FALSE}
+Rcpp::sourceCpp("/home/anders/Desktop/Skole/Blok 4 - 2023/Project in Statistics/Project-in-Statistics/explorative_environment/manualHMM.cpp")
+
+fit_weibull_normal_hmmFullRcpp <- function(step1, # Values in weibull observations
+                                           step2, # Values in normal observations
+                                           par, # Concatenation of all parameters
+                                           Gamma, #Transition probability matrix
+                                           delta, # Initial distribution
+                                           covarianceMatrix = NULL,  # Specify if the data is assumed independent in the fitting
+                                           eps = 0.001)
+{ 
+  objective_function <- function(step1, step2, par){
+  mu <- par[1:3]
+  sigma <- par[4:6]
+  # Parameter for the Weibull distribution of the second observation vector
+  shape <- par[7:9] 
+  scale <- par[10:12]
+  # S.T.P 
+  Gamma <- diag(3) 
+  Gamma[!Gamma] <- par[13:18]  # Fill non-diagonal entries
+  Gamma <- Gamma / rowSums(Gamma)  # Divide by row sums
+  # Initial distribution
+  delta <- c(par[19], par[20], 1)
+  delta <- delta / sum(delta)
+  
+  lik <- negative_log_likelihood_bivariate_weibull_normal_Rcpp(step1, step2, mu, sigma,
+                                                               shape, scale, Gamma, covarianceMatrix, delta, eps)
+  return(lik)
+}
+  
+  # Transform Gamma0 and delta0 to working scale
+  wGamma0 <- Gamma[!diag(3)]
+  wDelta0 <- delta[-3] / delta[3]
+  par0 <- c(par,  wGamma0, wDelta0)
+  
+    ## Use nlminb() to minimise the negative log-likelihood
+  mod <- nlminb(start = par0,
+                objective = objective_function,
+                step1 = step1,  # First observation vector
+                step2 = step2,  # Second observation vector
+                lower = c(rep(-Inf, 3), rep(0, 3), rep(0, 6), rep(0, 8)),
+                upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)))
+  # Normal distribution
+  mu_out <- mod$par[1:3]
+  sd_out <- mod$par[4:6] 
+  # Weibull distribution
+  shape_out = mod$par[7:9]
+  scale_out = mod$par[10:12]
+  # Transition probability matrix
+  Gamma_MLE <- diag(3)
+  Gamma_MLE[!Gamma_MLE] <- mod$par[13:18] 
+  Gamma_MLE <- Gamma_MLE / apply(Gamma_MLE, 1, sum)
+  # Initial distribution
+  delta_MLE <- c(mod$par[19], mod$par[20], 1)
+  delta_MLE <- delta_MLE / sum(delta_MLE)
+  return(
+    list(mean_normal = mu_out,
+         sd_normal = sd_out,
+         shape_weibull = shape_out,
+         scale_weibull = scale_out,
+         Gamma = Gamma_MLE,
+         delta = delta_MLE)
+  )
+}
+
+hiddenStateSequence_weibullnormal <- function(step1, # Values in weibull observations
+                                   step2, # Values in normal observations
+                                   par, # Concatenation of all parameters
+                                   Gamma, #Transition probability matrix
+                                   delta, # Initial distribution
+                                   independent = TRUE,
+                                   covarianceMatrix = NULL,  # Specify if the data is assumed independent in the fitting
+                                   eps = 0.001)
+{ 
+  
+  # Function that computes minus the log-likelihood
+  viterbi <- function(step1, step2, par) {
+    T <- length(step1)
+    # Unpack parameters for the first observation vector
+    mu <- par[1:3]
+    sigma <- par[4:6]
+    # Parameter for the Weibull distribution of the second observation vector
+    shape <- par[7:9] 
+    scale <- par[10:12]
+    # S.T.P 
+    Gamma <- diag(3) 
+    Gamma[!Gamma] <- par[13:18]  # Fill non-diagonal entries
+    Gamma <- Gamma / rowSums(Gamma)  # Divide by row sums
+    # Initial distribution
+    delta <- c(par[19], par[20], 1)
+    delta <- delta / sum(delta)
+    all_probs <- matrix(1, nrow = T, ncol = 3)  # Probabilities of observations from the first distribution
+    for (i in 1:3) {
+      if(independent){
+        step_prob1 <- dweibull(step1, shape[i], scale[i])  # Probability density function for the second distribution
+        step_prob2 <- dnorm(step2, mean = mu[i], sd = sigma[i])  # Probability density function for the second distribution
+        all_probs[, i] <- step_prob1*step_prob2
+      }
+      else{
+        all_probs[, i] <- gDensityRcpp(step1, step2, shape[i], scale[i], mu[i], sigma[i], covarianceMatrix, eps)
+      }
+    }
+    v <- delta * all_probs[1, ]
+    xi <- matrix(0,nrow=T,ncol=3)
+    xi[1,] <- v/sum(v)
+    for (t in 2:T) {
+      v <- apply(xi[t-1,]*Gamma,2,max)*all_probs[t,]
+      xi[t,] <- v/sum(v)
+    }
+    # most probable state sequence
+    stSeq <- rep(NA,T)
+    stSeq[T] <- which.max(xi[T,])
+    for (t in (T-1):1)
+      stSeq[t] <- which.max(Gamma[,stSeq[t+1]]*xi[t,])
+    return(stSeq)
+  }
+  
+  # Transform Gamma0 and delta0 to working scale
+  wGamma0 <- Gamma[!diag(3)]
+  wDelta0 <- delta / delta[3]
+  par0 <- c(par,  wGamma0, wDelta0)
+  return(viterbi(step1, step2, par0))
+}
+
+```
+
+```{r}
+Gamma0 <- eagleFit1$mle$gamma
+delta0 <- eagleFit1$mle$delta[1, ]
+correlatedFit <-  fit_weibull_normal_hmmFullRcpp(weibullNormalEagle$horizontal_steps, weibullNormalEagle$vertical_steps,
+                               c(mu0, sqrt(sigma0), k0, lambda0), Gamma0, delta0,
+                              covarianceMatrix = covMatEagle, 0.001)
+
+correlatedDecodedStates <- hiddenStateSequence_weibullnormal(weibullNormalEagle$horizontal_steps, weibullNormalEagle$vertical_steps, c(correlatedFit$mean_normal, correlatedFit$sd_normal, correlatedFit$shape_weibull, correlatedFit$scale_weibull), Gamma0, delta0, FALSE, covMatEagle, eps = 0.0001)
+```
+
 

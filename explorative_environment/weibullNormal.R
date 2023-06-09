@@ -22,7 +22,6 @@ mu_est <- numeric(length(rhos))
 sigma_est <- numeric(length(rhos))
 
 plots <- list()
-
 for (i in seq_along(rhos)) {
   rho1 <- rhos[i]
 
@@ -162,21 +161,24 @@ for (i in seq_along(obsPerAnimal)){
   }
   k <- obsPerAnimal[i]+k
 }
-statesForSim[c(1, 1+cumsum(obsPerAnimal)[-length(obsPerAnimal)])]
+statesForSim[c(1, 1+cumsum(obsPerAnimal)[-length(obsPerAnimal)])] %>% table()/length(obsPerAnimal)
 
 statesForSim %>% table()
 decodedStates %>% table()
 
 weibullParameters <- matrix(c(eagleFit1$mle[[1]][1, ],
                               eagleFit1$mle[[1]][2, ]), ncol = N, byrow = TRUE)
-normalParameters <- eagleFit1$mle[[2]]
+normalParameters <- matrix(c(eagleFit1$mle[[2]][1, ],
+                             eagleFit1$mle[[2]][2, ]), ncol = N, byrow = TRUE)
 
 
 eagleGamma <- eagleFit1$mle$gamma
 
+eagleDelta <- eagleFit1$mle$delta[1, ]
+
 # Fit similar data
-covMatEagle <- matrix(c(1, 0.99,
-                        0.99, 1), ncol = 2,
+covMatEagle <- matrix(c(1, 0.9,
+                        0.9, 1), ncol = 2,
                       byrow = TRUE)
 
 

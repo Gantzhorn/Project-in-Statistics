@@ -2,8 +2,10 @@ library(tidyverse)
 library(momentuHMM)
 theme_set(theme_bw())
 library(Rcpp)
+library(rmutil)
 library(microbenchmark)
 library(Matrix)
+library(profvis)
 
 Rcpp::sourceCpp("manualHMM.cpp")
 # Helper functions for bivariate weibull-normal density
@@ -116,8 +118,148 @@ k0 <- k
 lambda0 <- lambda
 Gamma0 <- Gamma # Transition probability matrix
 delta0 <- delta
+# Function that computes minus the log-likelihood
+negative_log_likelihood_weibull_normal <- function(step1, step2, par,independent = TRUE,
+                                                   covarianceMatrix = NULL,  # Specify if the data is assumed independent in the fitting
+                                                   eps = 0.001) {
+  T <- length(step1)
+  # Unpack parameters for the first observation vector
+  mu <- par[1:3]
+  sigma <- par[4:6]
+  # Parameter for the Weibull distribution of the second observation vector
+  shape <- par[7:9] 
+  scale <- par[10:12]
+  # S.T.P 
+  Gamma <- diag(3) 
+  Gamma[!Gamma] <- par[13:18]  # Fill non-diagonal entries
+  Gamma <- Gamma / rowSums(Gamma)  # Divide by row sums
+  # Initial distribution
+  delta <- c(par[19], par[20], 1)
+  delta <- delta / sum(delta)
+  all_probs <- matrix(1, nrow = T, ncol = 3)  # Probabilities of observations from the first distribution
+  for (i in 1:3) {
+    if(independent){
+      step_prob1 <- dweibull(step1, shape[i], scale[i])  # Probability density function for the second distribution
+      step_prob2 <- dnorm(step2, mean = mu[i], sd = sigma[i])  # Probability density function for the second distribution
+      all_probs[, i] <- step_prob1*step_prob2
+    }
+    else{
+      all_probs[, i] <- gDensityRcpp(step1, step2, shape[i], scale[i], mu[i], sigma[i], covarianceMatrix, eps)
+    }
+  }
+  v <- delta * all_probs[1, ]
+  llk <- 0
+  
+  for (t in 2:T) {
+    v <- v %*% Gamma * all_probs[t, ]
+    llk <- llk + log(sum(v))
+    v <- v / sum(v)  # Scaling to avoid numerical problems
+  }
+  return(-llk)  # Return the negative log-likelihood
+}
 
-fit_weibull_normal_hmm <- function(step1, # Values in weibull observations
+# Slow naive implementation
+# fit_weibull_normal_hmm <- function(step1, # Values in weibull observations
+#                                    step2, # Values in normal observations
+#                                    par, # Concatenation of all parameters
+#                                    Gamma, #Transition probability matrix
+#                                    delta, # Initial distribution
+#                                    independent = TRUE,
+#                                    covarianceMatrix = NULL,  # Specify if the data is assumed independent in the fitting
+#                                    eps = 0.001)
+# { 
+#   
+#   # Function that computes minus the log-likelihood
+#   negative_log_likelihood_weibull_normal <- function(step1, step2, par) {
+#     T <- length(step1)
+#     # Unpack parameters for the first observation vector
+#     mu <- par[1:3]
+#     sigma <- par[4:6]
+#     # Parameter for the Weibull distribution of the second observation vector
+#     shape <- par[7:9] 
+#     scale <- par[10:12]
+#     # S.T.P 
+#     Gamma <- diag(3) 
+#     Gamma[!Gamma] <- par[13:18]  # Fill non-diagonal entries
+#     Gamma <- Gamma / rowSums(Gamma)  # Divide by row sums
+#     # Initial distribution
+#     delta <- c(par[19], par[20], 1)
+#     delta <- delta / sum(delta)
+#     all_probs <- matrix(1, nrow = T, ncol = 3)  # Probabilities of observations from the first distribution
+#     for (i in 1:3) {
+#       if(independent){
+#         step_prob1 <- dweibull(step1, shape[i], scale[i])  # Probability density function for the second distribution
+#         step_prob2 <- dnorm(step2, mean = mu[i], sd = sigma[i])  # Probability density function for the second distribution
+#         all_probs[, i] <- step_prob1*step_prob2
+#       }
+#       else{
+#         all_probs[, i] <- gDensityVec(step1, step2, shape[i], scale[i], mu[i], sigma[i], covarianceMatrix, eps)
+#       }
+#     }
+#     v <- delta * all_probs[1, ]
+#     llk <- 0
+#     
+#     for (t in 2:T) {
+#       v <- v %*% Gamma * all_probs[t, ]
+#       llk <- llk + log(sum(v))
+#       v <- v / sum(v)  # Scaling to avoid numerical problems
+#     }
+#     return(-llk)  # Return the negative log-likelihood
+#   }
+#   
+#   # Transform Gamma0 and delta0 to working scale
+#   wGamma0 <- Gamma[!diag(3)]
+#   wDelta0 <- delta[-3] / delta[3]
+#   par0 <- c(par,  wGamma0, wDelta0)
+#   
+#   if(!independent){
+#     ## Use nlminb() to minimise the negative log-likelihood
+#     mod <- nlminb(start = par0,
+#                   objective = negative_log_likelihood_weibull_normal,
+#                   step1 = step1,  # First observation vector
+#                   step2 = step2,  # Second observation vector
+#                   lower = c(rep(-Inf, 3), rep(0, 3), rep(0, 6), rep(0, 8)),
+#                   upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)),
+#                   independent = independent,
+#                   covarianceMatrix = covarianceMatrix,
+#                   eps = eps)
+#   }
+#   else{
+#       ## Use nlminb() to minimise the negative log-likelihood
+#       mod <- nlminb(start = par0,
+#                     objective = negative_log_likelihood_weibull_normal,
+#                     step1 = step1,  # First observation vector
+#                     step2 = step2,  # Second observation vector
+#                     lower = c(rep(-Inf, 3), rep(0, 3), rep(0, 6), rep(0, 8)),
+#                     upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)))
+#     }
+#   
+#   # Normal distribution
+#   mu_out <- mod$par[1:3]
+#   sd_out <- mod$par[4:6] 
+#   # Weibull distribution
+#   shape_out = mod$par[7:9]
+#   scale_out = mod$par[10:12]
+#   # Transition probability matrix
+#   Gamma_MLE <- diag(3)
+#   Gamma_MLE[!Gamma_MLE] <- mod$par[13:18] 
+#   Gamma_MLE <- Gamma_MLE / apply(Gamma_MLE, 1, sum)
+#   # Initial distribution
+#   delta_MLE <- c(mod$par[19], mod$par[20], 1)
+#   delta_MLE <- delta_MLE / sum(delta_MLE)
+#   return(
+#     list(mean_normal = mu_out,
+#          sd_normal = sd_out,
+#          shape_weibull = shape_out,
+#          scale_weibull = scale_out,
+#          Gamma = Gamma_MLE,
+#          delta = delta_MLE)
+#   )
+# }
+
+
+
+fit_weibull_normal_hmmRcppDens <- function(step1, # Values in weibull observations
                                    step2, # Values in normal observations
                                    par, # Concatenation of all parameters
                                    Gamma, #Transition probability matrix
@@ -127,57 +269,32 @@ fit_weibull_normal_hmm <- function(step1, # Values in weibull observations
                                    eps = 0.001)
 { 
   
-  # Function that computes minus the log-likelihood
-  negative_log_likelihood_weibull_normal <- function(step1, step2, par) {
-    T <- length(step1)
-    # Unpack parameters for the first observation vector
-    mu <- par[1:3]
-    sigma <- par[4:6]
-    # Parameter for the Weibull distribution of the second observation vector
-    shape <- par[7:9] 
-    scale <- par[10:12]
-    # S.T.P 
-    Gamma <- diag(3) 
-    Gamma[!Gamma] <- par[13:18]  # Fill non-diagonal entries
-    Gamma <- Gamma / rowSums(Gamma)  # Divide by row sums
-    # Initial distribution
-    delta <- c(par[19], par[20], 1)
-    delta <- delta / sum(delta)
-    all_probs <- matrix(1, nrow = T, ncol = 3)  # Probabilities of observations from the first distribution
-    for (i in 1:3) {
-      if(independent){
-        step_prob1 <- dweibull(step1, shape[i], scale[i])  # Probability density function for the second distribution
-        step_prob2 <- dnorm(step2, mean = mu[i], sd = sigma[i])  # Probability density function for the second distribution
-        all_probs[, i] <- step_prob1*step_prob2
-      }
-      else{
-        all_probs[, i] <- gDensityVec(step1, step2, shape[i], scale[i], mu[i], sigma[i], covarianceMatrix, eps)
-      }
-    }
-    v <- delta * all_probs[1, ]
-    llk <- 0
-    
-    for (t in 2:T) {
-      v <- v %*% Gamma * all_probs[t, ]
-      llk <- llk + log(sum(v))
-      v <- v / sum(v)  # Scaling to avoid numerical problems
-    }
-    return(-llk)  # Return the negative log-likelihood
-  }
-  
   # Transform Gamma0 and delta0 to working scale
-  wGamma0 <- Gamma0[!diag(3)]
-  wDelta0 <- delta0[-3] / delta0[3]
+  wGamma0 <- Gamma[!diag(3)]
+  wDelta0 <- delta[-3] / delta[3]
   par0 <- c(par,  wGamma0, wDelta0)
   
+  if(!independent){
   ## Use nlminb() to minimise the negative log-likelihood
   mod <- nlminb(start = par0,
                 objective = negative_log_likelihood_weibull_normal,
                 step1 = step1,  # First observation vector
                 step2 = step2,  # Second observation vector
                 lower = c(rep(-Inf, 3), rep(0, 3), rep(0, 6), rep(0, 8)),
-                upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)))
-  
+                upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)),
+                independent = independent,
+                covarianceMatrix = covarianceMatrix,
+                eps = eps)
+  }
+  else{
+      ## Use nlminb() to minimise the negative log-likelihood
+      mod <- nlminb(start = par0,
+                    objective = negative_log_likelihood_weibull_normal,
+                    step1 = step1,  # First observation vector
+                    step2 = step2,  # Second observation vector
+                    lower = c(rep(-Inf, 3), rep(0, 3), rep(0, 6), rep(0, 8)),
+                    upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)))
+    }
   # Normal distribution
   mu_out <- mod$par[1:3]
   sd_out <- mod$par[4:6] 
@@ -201,20 +318,15 @@ fit_weibull_normal_hmm <- function(step1, # Values in weibull observations
   )
 }
 
-fit_weibull_normal_hmmRcppDens <- function(step1, # Values in weibull observations
-                                   step2, # Values in normal observations
-                                   par, # Concatenation of all parameters
-                                   Gamma, #Transition probability matrix
-                                   delta, # Initial distribution
-                                   independent = TRUE,
-                                   covarianceMatrix = NULL,  # Specify if the data is assumed independent in the fitting
-                                   eps = 0.001)
+fit_weibull_normal_hmmFullRcpp <- function(step1, # Values in weibull observations
+                                           step2, # Values in normal observations
+                                           par, # Concatenation of all parameters
+                                           Gamma, #Transition probability matrix
+                                           delta, # Initial distribution
+                                           covarianceMatrix = NULL,  # Specify if the data is assumed independent in the fitting
+                                           eps = 0.001)
 { 
-  
-  # Function that computes minus the log-likelihood
-  negative_log_likelihood_weibull_normal <- function(step1, step2, par) {
-    T <- length(step1)
-    # Unpack parameters for the first observation vector
+  objective_function <- function(step1, step2, par){
     mu <- par[1:3]
     sigma <- par[4:6]
     # Parameter for the Weibull distribution of the second observation vector
@@ -227,41 +339,24 @@ fit_weibull_normal_hmmRcppDens <- function(step1, # Values in weibull observatio
     # Initial distribution
     delta <- c(par[19], par[20], 1)
     delta <- delta / sum(delta)
-    all_probs <- matrix(1, nrow = T, ncol = 3)  # Probabilities of observations from the first distribution
-    for (i in 1:3) {
-      if(independent){
-        step_prob1 <- dweibull(step1, shape[i], scale[i])  # Probability density function for the second distribution
-        step_prob2 <- dnorm(step2, mean = mu[i], sd = sigma[i])  # Probability density function for the second distribution
-        all_probs[, i] <- step_prob1*step_prob2
-      }
-      else{
-        all_probs[, i] <- gDensityRcpp(step1, step2, shape[i], scale[i], mu[i], sigma[i], covarianceMatrix, eps)
-      }
-    }
-    v <- delta * all_probs[1, ]
-    llk <- 0
     
-    for (t in 2:T) {
-      v <- v %*% Gamma * all_probs[t, ]
-      llk <- llk + log(sum(v))
-      v <- v / sum(v)  # Scaling to avoid numerical problems
-    }
-    return(-llk)  # Return the negative log-likelihood
+    lik <- negative_log_likelihood_bivariate_weibull_normal_Rcpp(step1, step2, mu, sigma,
+                                                                 shape, scale, Gamma, covarianceMatrix, delta, eps)
+    return(lik)
   }
   
   # Transform Gamma0 and delta0 to working scale
-  wGamma0 <- Gamma0[!diag(3)]
-  wDelta0 <- delta0[-3] / delta0[3]
+  wGamma0 <- Gamma[!diag(3)]
+  wDelta0 <- delta[-3] / delta[3]
   par0 <- c(par,  wGamma0, wDelta0)
   
   ## Use nlminb() to minimise the negative log-likelihood
   mod <- nlminb(start = par0,
-                objective = negative_log_likelihood_weibull_normal,
+                objective = objective_function,
                 step1 = step1,  # First observation vector
                 step2 = step2,  # Second observation vector
                 lower = c(rep(-Inf, 3), rep(0, 3), rep(0, 6), rep(0, 8)),
                 upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)))
-  
   # Normal distribution
   mu_out <- mod$par[1:3]
   sd_out <- mod$par[4:6] 
@@ -287,7 +382,7 @@ fit_weibull_normal_hmmRcppDens <- function(step1, # Values in weibull observatio
 prepSimIndependent <- prepData(tibble(x = y1, y = y2), coordNames = NULL)
 
 # Independent fit
-manualMod1 <- fit_weibull_normal_hmm(y1, y2, c(mu0, sigma0, k0, lambda0), Gamma0, delta0) 
+#manualMod1 <- fit_weibull_normal_hmm(y1, y2, c(mu0, sigma0, k0, lambda0), Gamma0, delta0) 
 momentuMod1 <- fitHMM(data = prepSimIndependent,
                       nbStates = 3,
                       dist = list(x = "weibull",
@@ -307,6 +402,11 @@ momentuMod2 <- fitHMM(data = prepSimCorrelated,
                                   y = c(mu0, sigma0))
 )
 manualMod2 <- fit_weibull_normal_hmmRcppDens(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0, delta0)
+
+profvis({
+  source("~/Desktop/Skole/Blok 4 - 2023/Project in Statistics/Project-in-Statistics/explorative_environment/profiling.R")
+})
+
 # correlated fit
 manualMod3 <- fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
                        delta0, independent = FALSE, covarianceMatrix = covMat) 
@@ -314,17 +414,23 @@ manualMod3 <- fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda
 manualMod3Fast <- fit_weibull_normal_hmmRcppDens(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
                                                  delta0, independent = FALSE, covarianceMatrix = covMat)
 
-comp <- microbenchmark(fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
-                                     delta0, independent = FALSE, covarianceMatrix = covMat),
-               fit_weibull_normal_hmmRcppDens(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
-                                              delta0, independent = FALSE, covarianceMatrix = covMat), times = 30)
+manualMod3Faster <- fit_weibull_normal_hmmFullRcpp(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
+                                                 delta0, covarianceMatrix = covMat)
 
 
-# Plot the densities stratified by the function used
-ggplot(df, aes(x = Time, fill = Function)) +
-  geom_density(alpha = 0.5) +
-  labs(x = "Run Time", y = "Density", fill = "Function") +
-  theme_minimal()
+# comp <- microbenchmark(fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
+#                                      delta0, independent = FALSE, covarianceMatrix = covMat),
+#                fit_weibull_normal_hmmRcppDens(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
+#                                               delta0, independent = FALSE, covarianceMatrix = covMat),
+#                fit_weibull_normal_hmmFullRcpp(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
+#                                               delta0, covarianceMatrix = covMat),times = 30)
+# 
+# 
+# # Plot the densities stratified by the function used
+# ggplot(df, aes(x = Time, fill = Function)) +
+#   geom_density(alpha = 0.5) +
+#   labs(x = "Run Time", y = "Density", fill = "Function") +
+#   theme_minimal()
 
 hiddenStateSequence_weibullnormal <- function(step1, # Values in weibull observations
                                    step2, # Values in normal observations
@@ -387,17 +493,25 @@ hiddenStateSequence_weibullnormal <- function(step1, # Values in weibull observa
 
 
 # independent
-hiddenstates1 <- hiddenStateSequence_weibullnormal(y1, y2, c(mu0, sigma0, k0, lambda0), Gamma, delta)
-hiddenStatesMomentu1 <- viterbi(momentuMod1)
+# hiddenstates1 <- hiddenStateSequence_weibullnormal(y1, y2, c(mu0, sigma0, k0, lambda0), Gamma, delta)
+# hiddenStatesMomentu1 <- viterbi(momentuMod1)
 
 hiddenStatesMomentu2 <- viterbi(momentuMod2)
-hiddenstates2 <- hiddenStateSequence_weibullnormal(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma, delta)
-hiddenstates3 <- hiddenStateSequence_weibullnormal(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma, delta, independent = FALSE,
+# hiddenstates2 <- hiddenStateSequence_weibullnormal(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma, delta)
+hiddenstates3 <- hiddenStateSequence_weibullnormal(X_prime, Y_prime,
+                                                   c(manualMod3Faster$mean_normal, manualMod3Faster$sd_normal,
+                                                     manualMod3Faster$shape_weibull, manualMod3Faster$scale_weibull), 
+                                                   manualMod3Faster$Gamma, delta, independent = FALSE,
                                        covMat, eps = 0.0001)
 
 # State probabilites
-logAlphaMove <- function(step1,step2,par,
-                         Gamma,delta)
+logAlpha <- function(step1,
+                     step2,
+                     par,
+                     Gamma,
+                     delta,
+                     covarianceMatrix,
+                     eps)
 {
   mu <- par[1:3]
   sigma <- par[4:6]
@@ -409,11 +523,13 @@ logAlphaMove <- function(step1,step2,par,
   allProbs <- matrix(1,nrow=nbObs,ncol=N)
   
   for(state in 1:3) {
-    step1Prob <- dweibull(step1,shape[state],scale[state])
-   
-    step2Prob <- dnorm(step2,mu[state],sigma[state])
-    # joint probability = step probability * angle probability - for now
-    allProbs[, state] <- step1Prob*step2Prob
+    # step1Prob <- dweibull(step1,shape[state],scale[state])
+    # 
+    # step2Prob <- dnorm(step2,mu[state],sigma[state])
+    # # joint probability = step probability * angle probability - for now
+    # allProbs[, state] <- step1Prob*step2Prob
+  allProbs[,state] <-  gDensityRcpp(step1, step2, shape[state], scale[state],
+                                    mu[state], sigma[state], covarianceMatrix, eps)
   }
   lscale <- 0
   v <- delta*allProbs[1,]
@@ -433,18 +549,17 @@ pseudoResiduals <- function(step1, # Values in weibull observations
                           par, # Concatenation of all fitted parameters
                           Gamma, #Transition probability matrix
                           delta, # Initial distribution
-                          independent = TRUE,
                           covarianceMatrix = NULL,  # Specify if the data is assumed independent in the fitting
                           eps = 0.001)
 {
   nbObs <- length(step1)
   nbStates <- N
   pStep1Mat <- matrix(NA,nbObs,nbStates)
-  pStep2Mat <- matrix(NA,nbObs,nbStates)
+  #pStep2Mat <- matrix(NA,nbObs,nbStates)
   step1Res <- rep(NA,nbObs)
-  step2Res <- rep(NA,nbObs)
+  #step2Res <- rep(NA,nbObs)
   
-  la <- logAlphaMove(step1, step2, par, Gamma, delta)
+  la <- logAlpha(step1, step2, par, Gamma, delta, covarianceMatrix, eps)
   
   mu <- par[1:3]
   sigma <- par[4:6]
@@ -453,30 +568,40 @@ pseudoResiduals <- function(step1, # Values in weibull observations
   scale <- par[10:12]
   
   for(state in 1:nbStates) {
+    integrateFunction <- function(x,y){gDensityRcpp(x, y, shape[state], scale[state],
+                 mu[state], sigma[state], covarianceMatrix, eps)}
     for(t in 1:nbObs) {
-      # Integrate weibull
-      pStep1Mat[t,state] <- pweibull(step1[t], shape[state], scale[state])
-      # Integrate normal
-      pStep2Mat[t,state] <- pnorm(step2[t], mean = mu[state], sd = sigma[state])
+      pStep1Mat[t,state] <- rmutil::int2(integrateFunction, a = c(-Inf, 0), c(step1[t], step2[t]))
+      # # Integrate weibull
+      # pStep1Mat[t,state] <- pweibull(step1[t], shape[state], scale[state])
+      # # Integrate normal
+      # pStep2Mat[t,state] <- pnorm(step2[t], mean = mu[state], sd = sigma[state])
     }
   }
+  print(pStep1Mat)
   step1Res[1] <- qnorm(delta%*%pStep1Mat[1,])
-  step2Res[1] <- qnorm(delta%*%pStep2Mat[1,])
+  #step2Res[1] <- qnorm(delta%*%pStep2Mat[1,])
   
   for(t in 2:nbObs) {
     c <- max(la[t-1,]) # cancels out below; prevents numerical errors
     a <- exp(la[t-1,]-c)
     
     step1Res[t] <- qnorm(t(a)%*%(Gamma/sum(a))%*%pStep1Mat[t,])
-    step2Res[t] <- qnorm(t(a)%*%(Gamma/sum(a))%*%pStep2Mat[t,])
+    #step2Res[t] <- qnorm(t(a)%*%(Gamma/sum(a))%*%pStep2Mat[t,])
   }
   return(list(weibullResiduals=step1Res,normalResiduals=step2Res))
 }
 
-manualParametersIndependent <- c(manualMod1$mean_normal, manualMod1$sd_normal,
-                                 manualMod1$shape_weibull, manualMod1$scale_weibull)
+pseudoResidualsWeibullNormal <- pseudoResiduals(y1, y2, c(manualMod3Faster$mean_normal,
+                                                                    manualMod3Faster$sd_normal,
+                                                          manualMod3Faster$scale_weibull, 
+                                                          manualMod3Faster$scale_weibull),
+                                                Gamma, delta,
+                                                covarianceMatrix = covMat, 
+                                                eps = .0001)
 
-manualParametersCorrelated <- c(manualMod3Fast$mean_normal, manualMod3Fast$sd_normal,
-                                manualMod3Fast$scale_weibull, manualMod3Fast$scale_weibull)
-
-pseudoResiduals(y1, y2, manualParametersIndependent, manualMod1$Gamma, manualMod1$delta)
+tibble(weibull = pseudoResidualsWeibullNormal$weibullResiduals,
+       normal = pseudoResidualsWeibullNormal$normalResiduals) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "pseudoResidual") %>% 
+  ggplot(aes(sample = pseudoResidual)) + geom_qq() + geom_qq_line() +
+  facet_wrap(~ Variable) +  labs(x = "Theoretical Quantiles", y = "Observed Quantiles")

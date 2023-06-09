@@ -39,13 +39,49 @@ Rcpp::NumericVector gDensityRcpp(Rcpp::NumericVector x, Rcpp::NumericVector y,
   return density;
 }
 
-/*
- * gDensityVec <- function(x, y, k, lambda, mu, sigma, covarianceMatrix, eps) {
- covMatInverse <- inverseCalculator(covarianceMatrix)
- inputMatrix <- cbind(g1Inverse(y, mu, sigma), g2InverseVec(x, k, lambda, eps))
- result <- 1 / (2 * pi * sqrt(determinantCalculator(covarianceMatrix))) *
- gjacobianVec(x, k, lambda, sigma, eps) *
- exp(-1 / 2 * quadratic_formVec(covMatInverse, inputMatrix))
- return(result)
- }
- */
+// [[Rcpp::export]]
+double negative_log_likelihood_bivariate_weibull_normal_Rcpp(Rcpp::NumericVector step1,
+                                                                Rcpp::NumericVector step2,
+                                                                Rcpp::NumericVector mu,
+                                                                Rcpp::NumericVector sigma,
+                                                                Rcpp::NumericVector shape,
+                                                                Rcpp::NumericVector scale,
+                                                                Rcpp::NumericMatrix Gamma,
+                                                                Rcpp::NumericMatrix covarianceMatrix,
+                                                                Rcpp::NumericVector delta,
+                                                                double eps = 0.001){
+  int T = step1.length();
+  int N = delta.length();
+  Rcpp::NumericMatrix all_probs(T,3);
+  for (int i = 0; i < N; i++) {
+      all_probs(Rcpp::_ , i) = gDensityRcpp(step1, step2, shape[i], scale[i], mu[i], sigma[i], covarianceMatrix, eps);
+  }
+  
+  Rcpp::NumericVector v(N);
+  double llk = 0.0;
+  
+  // Initialization
+  for (int i = 0; i < N; i++) {
+    v[i] = delta[i] * all_probs(0, i);
+  }
+  
+  // Loop over time steps
+  for (int t = 1; t < T; t++) {
+    // Matrix-vector multiplication
+    for (int i = 0; i < N; i++) {
+      double sumValue = 0.0;
+      for (int j = 0; j < N; j++) {
+        sumValue += v[j] * Gamma(j, i);
+      }
+      v[i] = sumValue * all_probs(t, i);
+    }
+    
+    // Log-sum scaling
+    double sumV = sum(v);
+    llk += log(sumV);
+    v = v / sumV;
+  }
+  return -llk;
+}
+
+
