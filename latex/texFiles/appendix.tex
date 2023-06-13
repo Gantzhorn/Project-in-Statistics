@@ -40,7 +40,7 @@ For varying levels of correlation $\rho$ in the bivariate normal we simulate $2.
           0.1 & 2.015213 & 5.002888 & 4.0 & 3.0 & 0.101309 \\ 
            \hline
         \end{tabular}
-    \caption{Estimated parameters the simulated data}
+    \caption{Estimated parameters in the simulated data}
     \label{correlationTable}
 \end{table}\\
 We plot the joint - and marginal distributions for the data in table \ref{correlationTable}.
@@ -49,7 +49,7 @@ We plot the joint - and marginal distributions for the data in table \ref{correl
         \includegraphics[scale = .225]{figures/correlatedWeibullNormalSim.jpeg}
         \caption{Joint - and marginal distributions for the data in table \ref{correlationTable} with negative correlation in the first row and positive in the second row}
     \end{center}
-    \label{correlationDensities}
+    \label{correlationDensities1}
 \end{figure}
 
 \subsection{Imitated eagle data}
@@ -81,8 +81,37 @@ This section shows analagously to appendix \ref{simstudyappendix} the results of
 \end{figure}
 \newpage
 \section{Findings auxilliary results}\label{auxiliaryResultsModelling}
-This part shows different additional plots and graphs found in the modelling and simulations. 
+This part shows different additional plots and graphs found in the modelling and simulations.
 \subsection{Fitting an HMM to the Golden eagle segments}\label{goldenEagleSegments}
+\begin{table}[ht]
+    \centering
+    \begin{tabular}{lcccc}
+      \hline
+      & $\mathbb{E}\left[X\right]$ & $\sigma_X$ & $\mathbb{E}\left[Y\right]$ & $\sigma_Y$ \\ 
+      \hline
+      \textbf{State 1} & 931.65 & 303.71 & -40.00 & 104.80 \\ 
+      \textbf{State 2} & 373.36 & 221.89 & 30.11 & 78.72 \\ 
+      \textbf{State 3} & 19.47 & 19.02 & -1.39 & 28.11 \\ 
+       \hline
+    \end{tabular}
+    \caption{Mean of the initial fit for each dimension and state}
+    \label{initialFitMeans}
+\end{table}
+\begin{figure}[h]
+    \begin{center}
+        \includegraphics[scale = .14]{figures/AltitudeFourBirds.jpeg}
+    \end{center}
+    \caption{Altitude as a function of time since start of segment for four selected segments.}
+    \label{fourSegments}
+\end{figure}
+\newpage
+\begin{figure}[h]
+    \begin{center}
+        \includegraphics[scale = .14]{figures/horizontalStepsCombinedDistributionInitialFitZoom.jpeg}
+    \end{center}
+    \caption{Zoom of marginal distribution of the horizontal steps}
+    \label{zoomHorizontal}
+\end{figure}
 \newpage
 \section{Finding the density of the Weibull-Gaussian distribution}\label{weibullGaussianAppendix}
 To find the density of the Weibull-Gaussian distribution, we let $(X_1, X_2)$ be bivariate gaussian with mean vector, $\xi = \mathbf{0}$ and covariance matrix $\Sigma = \begin{pmatrix}

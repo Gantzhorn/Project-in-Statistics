@@ -47,7 +47,7 @@ And via a recursive scheme
 \subsection{Assessing the fit}
 When we have access to them i.e. when we simulate toy data, we will assess the fit via the ground truth parameters and the hidden state sequence. The Monte Carlo estimate is used as the probability that we correctly decode the state at any time $t$. In addition, we investigate the parameters of the observed states distributions for biases. However, when we do the actual modelling, we naturally do not have the ground truth. For this part we will draw from our experiences from the simulations, but we also consider the pseudo-residuals defined for the $k$th entry in our observed sequence at time $t$ as \cite{HHMForTimesSeries}
 \begin{align}
-    r_t^{(k)} = \Phi^{-1}\left(\mathbb{P}\left(Y_t^{(k)} \leq y_t^{(k)}\right)\right) = \Phi^{-1}\left(u_t^{(k)}\right)
+    r_t^{(k)} = \Phi^{-1}\left(\mathbb{P}\left(Y_t^{(k)} \leq y_t^{(k)}\right)\right) = \Phi^{-1}\left(u_t^{(k)}\right) \label{pseudoresidualsFormula}
 \end{align}
 The implementation of which is done analagously to momentuHMM \cite{momentuHMM}.
 By invoking the quantile transformation theorem twice we see that if the model is correctly specified then $u_t^{(k)}\sim \mathcal{U}(0,1)$ and thus $r_t^{(k)}\sim\mathcal{N}\left(0,1\right)$. We prefer the gaussian pseudo-residuals to the uniform, due to them allowing us to more easily detect outliers being way easier to detect outliers. On top of this, the residuals are independent, which we check through autocorrelation and plots of the value of the residuals over time. In addition, we test for the gaussianity be means of the Jarque-Bera test defined as

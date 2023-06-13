@@ -1,6 +1,6 @@
 In this section, we present the results obtained from the modelling and simulation. The results are presented in the same order as they were originally explained.
 \subsection{Fitting an HMM to the Golden eagle segments}
-Firstly, the simple fitting with the \texttt{momentuHMM}-package had better results, when we initialized with just the maximum likelihood estimate for the entire data rather than stratifiying the data according to k-means and then do the calculations. The maximum likelihood estimates were $-576614.8$ and $-576615.8$ respectively. Recall, that the scale of these is non-interpretable. That means that although the numbers themselves are quite close relatively speaking, the difference in the model might be quite significant. As they come from the same probability distribution, the likelihood is comparable. Therefore our initial model becomes the one with the simple initialization strategy. We present the results of the fitted model as well as the standard errors of the estimates
+Firstly, the simple HMM with the \texttt{momentuHMM}-package had better results, when we initialized with just the maximum likelihood estimate for the entire data rather than stratifiying the data according to k-means and then do the calculations. The maximum likelihood estimates were $-576614.8$ and $-576615.8$ respectively. Recall, that the numeric value of these is non-interpretable. That means that although the numbers themselves are quite close relatively speaking, the difference in the model might be quite significant. Note that this comparison only makes sense, due to both fits comining from the familiy of distributions; the likelihood is comparable. Therefore our initial model becomes the one with the simple initialization strategy. We present the results of this fitted model as well as the standard errors of the estimates
 \begin{align}
     \hat{\Gamma} &= \begin{pmatrix}
     8.32 \cdot 10^{-1} (3.52 \cdot 10^{-3}) & 1.68 \cdot 10^{-1} (3.53 \cdot 10^{-3}) & 1.90 \cdot 10^{-4} (1.79 \cdot 10^{-4})\\
@@ -13,7 +13,7 @@ Firstly, the simple fitting with the \texttt{momentuHMM}-package had better resu
         1.23 \cdot 10^{-1} (1.51 \cdot 10^{-2})
     \end{pmatrix}^\top
     \end{align}
-\begin{table}[ht]
+\begin{table}[h]
     \centering
     \begin{tabular}{rrrr}
         \hline
@@ -26,18 +26,69 @@ Firstly, the simple fitting with the \texttt{momentuHMM}-package had better resu
         \hline
     \end{tabular}
     \caption{Table of estimates and standard errors for the parameters of the observed state distributions}
+    \label{estimParam1}
 \end{table}\\
-Decoding with the viterbi-algorithm yields an absolute- and proportionate distribution of each state
-\begin{table}[ht]
+We calculate the mean and standard deviation for each variable and state. The results are depicted in appendix \ref{goldenEagleSegments} in table \ref{initialFitMeans}. Looking at these values one might be able to come up with appropriate names for the states. For our purpose we can get additional help by decoding with the viterbi-algorithm yields
+\begin{table}[h]
     \centering
     \begin{tabular}{ccc}
         \hline
         \textbf{State} & \textbf{Observations} & \textbf{Proportion} \\
         \hline
-        1 & 17973 & 0.397 \\
-        2 & 23223 & 0.512 \\
-        3 & 4119 & 0.0909 \\
+        1 & 17973 & 39.7\% \\
+        2 & 23223 & 51.2\% \\
+        3 & 4119 & 9.09\% \\
         \hline
     \end{tabular}
-    \caption{Number of observations in each state and their proportion of the total number of states.}
+    \caption{Number of observations in each state and their proportion of the total observations}
+    \label{estimWeight1}
+\end{table}\\
+Color coding the observation in accordance to the decoded state and graphing time since a segment started and altitude reveals an appropriate labelling of the states. We select segment 539 to illustrate this; it has an even distribution of decoded states and a fair amount of observations
+\begin{figure}[h]
+    \begin{center}
+        \includegraphics[scale = .1]{figures/Altitudebird539.jpeg}
+    \end{center}
+    \caption{The time since segment 539 started and altitude}
+\end{figure}\\
+Where we have taken the liberty to label the states in legend as we will henceforth. That is,
+going forward state 1, 2 and 3 from previous plots is denoted: \textit{Gliding}, \textit{Soaring} and \textit{Perching} respectively. We naturally ensure to correct the naming if state-switching ever occurs during fitting. For the record we note that in spite of the fact that the labelling suggests otherwise the decoded state does not always correspond so unambigously to changing in altitudes see figure \ref{fourSegments} in appendix \ref{goldenEagleSegments}.
+Moving on, the information from the viterbi algortihm allows us to calculate the estimated distribution of our observations. With the help of \texttt{density} function \cite{RLang} applied to the real observations, we find the points in which we calculate estimates. Then we use the estimated parameters from table \ref{estimParam1} and weigh according to table \ref{estimWeight1} to get the estimated density. We plot this for each variable
+\begin{figure}[h]
+    \centering
+    \begin{minipage}[b]{0.49\textwidth}
+      \includegraphics[width=\textwidth]{figures/horizontalStepsCombinedDistributionInitialFit.jpeg}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.49\textwidth}
+      \includegraphics[width=\textwidth]{figures/verticalStepsCombinedDistributionInitialFit.jpeg}
+    \end{minipage}
+    \caption{The marginal distribution of the observed sequence according to our initial fit}
+    \label{combinedDensityPlotsInitialFit}
+\end{figure}\\
+These estimated densities are a first look into an assessement of our models. For the vertical steps it seems that the fit is spot on, whereas the model does to exagerate the density of smaller values in the Horizontal steps. As is always the case though these the plots are only indicative. If one adjust the binwidth and zoom of the plot it may seem that model in fact captures the smaller value without issue (see figure \ref{zoomHorizontal} in appendix \ref{goldenEagleSegments}). Instead we turn to the more rigorous approach described under \nameref{Methods}. We calculate the pseudoresiduals (\ref{pseudoresidualsFormula}) using \texttt{momentuHMM::pseudoRes} and make a QQ-plot of both variables
+\begin{figure}[h]
+    \centering
+    \begin{minipage}[b]{0.49\textwidth}
+      \includegraphics[width=\textwidth]{figures/horizontal_stepsQQRes.jpeg}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.49\textwidth}
+      \includegraphics[width=\textwidth]{figures/vertical_stepsQQRes.jpeg}
+    \end{minipage}
+    \caption{QQ-plots for the resiudals of both varialbes}
+    \label{combinedQQPlots}
+\end{figure}\\
+Obviously, the real distribution is not captured perfectly here. The distribution of the empirical quantiles for the horizontal- and vertical steps are more light- and heavy tailed respectively. However, as the transparency of the points hint at, there are only a few points in the worst areas. To illustrate this more rigidly we calculate key quantiles and compare them to the quantiles of the standard gaussian distribution.
+\begin{table}[h]
+    \centering
+    \begin{tabular}{crrrrr}
+      \hline
+     Type of quantile & $2.5\%$ & $25\%$ & $50\%$ & $75\%$ & $97.5\%$ \\ 
+     \hline
+     $\mathcal{N}(0,1)$ & -1.96 & -0.67 & 0.00 & 0.67 & 1.96 \\ 
+     Horizontal steps & -1.87 & -0.66 & 0.02 & 0.67 & 1.82 \\ 
+     Vertical steps & -1.62 & -0.56 & -0.05 & 0.53 & 2.07 \\ 
+        \hline
+    \end{tabular}
+    \caption{Theoretical quantiles for the standard normal compared to the empirical quantiles}
 \end{table}
