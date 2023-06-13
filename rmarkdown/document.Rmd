@@ -16,6 +16,7 @@ library(geodata)
 library(plot3D)
 library(grid)
 library(ggExtra)
+library(leaflet)
 library(rayshader)
 library(rgdal)
 library(xtable)
@@ -343,18 +344,18 @@ And plot the data stratified to the states
 eagleData <- eagleData %>% mutate(decodedstates = factor(decodedstates))
 
 ggplot(eagleData, aes(x = horizontal_steps, y = vertical_steps, col = decodedstates)) + 
-geom_point(alpha = 0.4) +
-scale_color_manual(values = proj_palette,
-                   labels = c("Gliding", "Soaring", "Perching")) +
-                   guide = guide_legend(override.aes = list(alpha = 1)) + 
-scale_x_log10() + 
-xlab("Horizontal steps") +
-ylab("Vertical steps") + 
-facet_wrap(~decodedstates, ncol = 3, scale = "free_x") + 
-theme(text = element_text(size = 14, face = "bold"),
-      legend.title = element_blank(),
-      strip.text = element_text(size = 0),
-      strip.background = element_blank())
+  geom_point(alpha = 0.4) +
+  scale_color_manual(values = proj_palette,
+                     labels = c("Gliding", "Soaring", "Perching"),
+                     guide = guide_legend(override.aes = list(alpha = 1))) + 
+  scale_x_log10() + 
+  xlab("Horizontal steps") +
+  ylab("Vertical steps") + 
+  facet_wrap(~ decodedstates, ncol = 3, scale = "free_x") + 
+  theme(text = element_text(size = 14, face = "bold"),
+        legend.title = element_blank(),
+        strip.text = element_text(size = 0),
+        strip.background = element_blank())
 
 ```
 
@@ -525,12 +526,33 @@ xtable(matrix(c(qnorm(p = quantilePoints),
 # Make autocorrelation plots
 acf_vals <- acf(pseudoResTibble$vertical_stepsRes[is.finite(pseudoResTibble$vertical_stepsRes)], plot = FALSE)
 acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
-ggplot(acftib, aes(x = lag, y = ACF)) +
-  geom_hline(yintercept = 0, color = "black") +
-  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed", color = proj_palette[3]) +
-  geom_segment(aes(xend = lag, yend = 0), color = "black") +
-  xlab("Lag") +
-  ylab("Autocorrelation")
+acfVerticalPseudoResiduals <- ggplot(acftib[-1,], aes(x = lag, y = ACF)) +
+  geom_hline(yintercept = 0, color = "black", size = 1) +
+  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
+             color = proj_palette[3], linewidth = 1.5) +
+  geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
+  xlab("Lag (Vertical pseudoresiduals") +
+  ylab("") +
+  theme(plot.title = element_text(face = "bold"), 
+        axis.title = element_text(face = "bold"))
+
+acf_vals1 <-  acf(pseudoResTibble$horizontal_stepsRes[is.finite(pseudoResTibble$horizontal_stepsRes)], plot = FALSE)
+acftib1 <- tibble(ACF = acf_vals1$acf, lag = acf_vals1$lag)
+acfHorizontalPseudoResiduals <- ggplot(acftib1[-1,], aes(x = lag, y = ACF)) +
+  geom_hline(yintercept = 0, color = "black", size = 1) +
+  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
+             color = proj_palette[3], linewidth = 1.5) +
+  geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
+  xlab("Lag (Horizontal pseudoresiduals") +
+  ylab("Autocorrelation") +
+  theme(plot.title = element_text(face = "bold"), 
+        axis.title = element_text(face = "bold"))
+
+ggsave(filename = "acfVerticalPseudoResiduals.jpeg", plot = acfVerticalPseudoResiduals,
+       path = plotPath)
+
+ggsave(filename = "acfHorizontalPseudoResiduals.jpeg", plot = acfHorizontalPseudoResiduals,
+       path = plotPath)
 ```
 
 ## Plot a few individual birds
@@ -541,9 +563,33 @@ favourite_bird <- eagleData %>% group_by(Segment_ID) %>% summarise(n = n()) %>% 
   slice_max(n) %>% .$Segment_ID
 
 
-favourite_birdTibble <- eagleData %>% filter(Segment_ID == 48)
-mapview::mapview(favourite_birdTibble, xcol = "Longitude", ycol = "Latitude", crs = 4326,
-                 grid = FALSE, zcol = "decodedstates")
+favourite_birdTibble <- eagleData %>% filter(Segment_ID == 539)
+favourite_birdTibble <- favourite_birdTibble %>% 
+  mutate(decodedstates = recode(decodedstates,
+                                `1` = "Gliding",
+                                `2` = "Soaring",
+                                `3` = "Resting"))
+
+proj_palette1 <- proj_palette[1:3]
+names(proj_palette1) <- unique(favourite_birdTibble$decodedstates)
+
+# Create a color palette function
+colorPalette <- colorFactor(proj_palette1, favourite_birdTibble$decodedstates)
+
+# Create the map
+leaflet_map <-  leaflet(favourite_birdTibble) %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addPolylines(lng = ~Longitude, lat = ~Latitude, color = "black") %>%
+  addCircleMarkers(lng = ~Longitude, lat = ~Latitude, radius = 5,
+                   color = ~colorPalette(decodedstates),
+                   fillColor = ~colorPalette(decodedstates),
+                   fillOpacity = 1,
+                   popup = ~decodedstates) %>%
+  addLegend("bottomright", colors = proj_palette1,
+            title = "<b>Decoded State",
+            labels = paste("<b>", names(proj_palette1), "</b>"),
+            opacity = 1)
+
 ```
 ### Using ggmap
 

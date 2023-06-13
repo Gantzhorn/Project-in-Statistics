@@ -45,12 +45,24 @@ We calculate the mean and standard deviation for each variable and state. The re
 \end{table}\\
 Color coding the observation in accordance to the decoded state and graphing time since a segment started and altitude reveals an appropriate labelling of the states. We select segment 539 to illustrate this; it has an even distribution of decoded states and a fair amount of observations
 \begin{figure}[h]
-    \begin{center}
-        \includegraphics[scale = .1]{figures/Altitudebird539.jpeg}
-    \end{center}
-    \caption{The time since segment 539 started and altitude}
+  \centering
+  \begin{minipage}[b]{0.49\textwidth}
+    \includegraphics[width=\textwidth]{figures/Altitudebird539.jpeg}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[b]{0.49\textwidth}
+    \includegraphics[width=\textwidth]{figures/realMapBird539.png}
+  \end{minipage}
+  \caption{The time since segment 539 started and the altitude and position of the bird}
+  \label{bird539}
 \end{figure}\\
-Where we have taken the liberty to label the states in legend as we will henceforth. That is,
+% \begin{figure}[h]
+%     \begin{center}
+%         \includegraphics[scale = .1]{figures/Altitudebird539.jpeg}
+%     \end{center}
+%     \caption{The time since segment 539 started and the altitude of the bird}
+% \end{figure}\\
+Where we have taken the liberty to label the states in the legend as we will henceforth. That is,
 going forward state 1, 2 and 3 from previous plots is denoted: \textit{Gliding}, \textit{Soaring} and \textit{Perching} respectively. We naturally ensure to correct the naming if state-switching ever occurs during fitting. For the record we note that in spite of the fact that the labelling suggests otherwise the decoded state does not always correspond so unambigously to changing in altitudes see figure \ref{fourSegments} in appendix \ref{goldenEagleSegments}.
 Moving on, the information from the viterbi algortihm allows us to calculate the estimated distribution of our observations. With the help of \texttt{density} function \cite{RLang} applied to the real observations, we find the points in which we calculate estimates. Then we use the estimated parameters from table \ref{estimParam1} and weigh according to table \ref{estimWeight1} to get the estimated density. We plot this for each variable
 \begin{figure}[h]
@@ -78,7 +90,7 @@ These estimated densities are a first look into an assessement of our models. Fo
     \caption{QQ-plots for the resiudals of both varialbes}
     \label{combinedQQPlots}
 \end{figure}\\
-Obviously, the real distribution is not captured perfectly here. The distribution of the empirical quantiles for the horizontal- and vertical steps are more light- and heavy tailed respectively. However, as the transparency of the points hint at, there are only a few points in the worst areas. To illustrate this more rigidly we calculate key quantiles and compare them to the quantiles of the standard gaussian distribution.
+Obviously, the seems to be something that the model does not capture. The distribution of the empirical quantiles for the horizontal- and vertical steps are more light- and heavy tailed respectively. However, as the transparency of the points hint at, there are only a few points in the worst areas. To illustrate this in another way, we calculate key quantiles and compare them to the quantiles of the standard gaussian distribution.
 \begin{table}[h]
     \centering
     \begin{tabular}{crrrrr}
@@ -91,4 +103,17 @@ Obviously, the real distribution is not captured perfectly here. The distributio
         \hline
     \end{tabular}
     \caption{Theoretical quantiles for the standard normal compared to the empirical quantiles}
-\end{table}
+\end{table}\\
+So the center of the distribution is not as far of the quantiles as we QQ-plot might suggest. However, this is not enough to remedy the fact that the Jarque-bera test yields test statistics of $59.115$ $315366$ respectively, which is more than critical for the normality hypothesis. Before we move on to fit a more flexible model, we briefly assess the assumption about the markov property. We compute the autocorrelation of the observations 
+\begin{figure}[h]
+    \centering
+    \begin{minipage}[b]{0.49\textwidth}
+      \includegraphics[width=\textwidth]{figures/acfHorizontalPseudoResiduals.jpeg}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.49\textwidth}
+      \includegraphics[width=\textwidth]{figures/acfVerticalPseudoResiduals.jpeg}
+    \end{minipage}
+    \caption{QQ-plots for the resiudals of both varialbes}
+    \label{combinedACFPlots}
+\end{figure}\\
