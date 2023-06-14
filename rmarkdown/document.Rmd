@@ -338,11 +338,10 @@ ggsave(filename = "verticalStepsCombinedDistributionInitialFit.jpeg",
 Add decoded states to the dataset
 ```{r message = FALSE}
 eagleData <- tibble(eagleData, decodedstates = decodedStatesFit1)
+eagleData <- eagleData %>% mutate(decodedstates = factor(decodedstates))
 ```
 And plot the data stratified to the states
 ```{r message = FALSE}
-eagleData <- eagleData %>% mutate(decodedstates = factor(decodedstates))
-
 ggplot(eagleData, aes(x = horizontal_steps, y = vertical_steps, col = decodedstates)) + 
   geom_point(alpha = 0.4) +
   scale_color_manual(values = proj_palette,
@@ -414,7 +413,8 @@ Altitudebird539 <- eagleData %>%
           axis.title = element_text(face = "bold", size = 14),
           legend.title = element_text(face = "bold", size = 14),
           legend.text = element_text(face = "bold", size = 12)
-    )
+    ) + theme(legend.position="none")
+
 
 
 ggsave(filename = "Altitudebird539.jpeg",
@@ -568,7 +568,7 @@ favourite_birdTibble <- favourite_birdTibble %>%
   mutate(decodedstates = recode(decodedstates,
                                 `1` = "Gliding",
                                 `2` = "Soaring",
-                                `3` = "Resting"))
+                                `3` = "Perching"))
 
 proj_palette1 <- proj_palette[1:3]
 names(proj_palette1) <- unique(favourite_birdTibble$decodedstates)
@@ -585,10 +585,12 @@ leaflet_map <-  leaflet(favourite_birdTibble) %>%
                    fillColor = ~colorPalette(decodedstates),
                    fillOpacity = 1,
                    popup = ~decodedstates) %>%
-  addLegend("bottomright", colors = proj_palette1,
+  addLegend("topleft", colors = proj_palette1,
             title = "<b>Decoded State",
             labels = paste("<b>", names(proj_palette1), "</b>"),
-            opacity = 1)
+            opacity = 1) %>% 
+  addScaleBar(position = "bottomright",
+              options = scaleBarOptions(metric = TRUE, imperial = FALSE, maxWidth = 200))
 
 ```
 ### Using ggmap

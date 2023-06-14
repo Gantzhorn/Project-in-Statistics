@@ -47,15 +47,15 @@ Color coding the observation in accordance to the decoded state and graphing tim
 \begin{figure}[h]
   \centering
   \begin{minipage}[b]{0.49\textwidth}
-    \includegraphics[width=\textwidth]{figures/Altitudebird539.jpeg}
+    \includegraphics[height=0.20\textheight]{figures/Altitudebird539.jpeg}
   \end{minipage}
   \hfill
   \begin{minipage}[b]{0.49\textwidth}
-    \includegraphics[width=\textwidth]{figures/realMapBird539.png}
+    \includegraphics[height=0.2\textheight]{figures/realMapBird539.png}
   \end{minipage}
   \caption{The time since segment 539 started and the altitude and position of the bird}
   \label{bird539}
-\end{figure}\\
+\end{figure}
 % \begin{figure}[h]
 %     \begin{center}
 %         \includegraphics[scale = .1]{figures/Altitudebird539.jpeg}
@@ -104,16 +104,21 @@ Obviously, the seems to be something that the model does not capture. The distri
     \end{tabular}
     \caption{Theoretical quantiles for the standard normal compared to the empirical quantiles}
 \end{table}\\
-So the center of the distribution is not as far of the quantiles as we QQ-plot might suggest. However, this is not enough to remedy the fact that the Jarque-bera test yields test statistics of $59.115$ $315366$ respectively, which is more than critical for the normality hypothesis. Before we move on to fit a more flexible model, we briefly assess the assumption about the markov property. We compute the autocorrelation of the observations 
+So the empirical quantiles is not as far of that of a standard gaussian as the QQ-plot might suggest. However, this is not enough to remedy the fact that Jarque-bera \cite{tseries} yields test statistics of $59.115$ and $315366$ respectively; more than critical for the null i.e. the data is gaussian. Before we move on to fit a more flexible model, we briefly assess the assumption about the markov property. We compute the autocorrelation of the observations. Note that lag 0 obviously always has lag 1, why we have removed it to get the depicted values closer in scale.
 \begin{figure}[h]
-    \centering
-    \begin{minipage}[b]{0.49\textwidth}
-      \includegraphics[width=\textwidth]{figures/acfHorizontalPseudoResiduals.jpeg}
-    \end{minipage}
-    \hfill
-    \begin{minipage}[b]{0.49\textwidth}
-      \includegraphics[width=\textwidth]{figures/acfVerticalPseudoResiduals.jpeg}
-    \end{minipage}
-    \caption{QQ-plots for the resiudals of both varialbes}
-    \label{combinedACFPlots}
+  \centering
+  \begin{minipage}[b]{0.34\textwidth}
+    \includegraphics[width=\textwidth]{figures/acfHorizontalPseudoResiduals.jpeg}
+  \end{minipage}
+  \hspace{0.03\textwidth}
+  \begin{minipage}[b]{0.34\textwidth}
+    \includegraphics[width=\textwidth]{figures/acfVerticalPseudoResiduals.jpeg}
+  \end{minipage}
+  \caption{QQ-plots for the residuals of both variables}
+  \label{combinedACFPlots}
 \end{figure}\\
+We see that there is some significant autocorrelation that the model has not captured. In particular for the horizontal pseudoresiduals the autocorrelation is larger than our chosen significance level of $\pm 0.025$. Especially the observation at lag 1\newpage
+\subsection{Simulating from hidden markov models without conditional independence}
+We recommence as described in sections \ref{eagleImitation} and \ref{simHMM}. What we already noted in these section is that by looking at the tables \ref{correlationTable} and \ref{correlatedEagleTable} as well as the figures
+\ref{correlationEagleDensities} and \ref{correlationDensities1} we can see that we have developed a powerful method of marginally getting any distribution we want with (sort of) the correlation we would like.
+\subsubsection{}

@@ -2,16 +2,18 @@
 
 // [[Rcpp::export]]
 Rcpp::NumericVector gDensityRcpp(Rcpp::NumericVector x, Rcpp::NumericVector y,
-                                   double k, double lambda, double mu, double sigma, Rcpp::NumericMatrix covariancematrix,
+                                   double k, double lambda, double mu, double sigma,
+                                   Rcpp::NumericMatrix covariancematrix,
                                    double eps) {
   int n = x.length();
   Rcpp::NumericMatrix covariancematrixInverse(2, 2);
-  covariancematrixInverse(0, 0) = covariancematrix(0, 0);
-  covariancematrixInverse(1, 1) = covariancematrix(1, 1);
+  covariancematrixInverse(0, 0) = covariancematrix(1, 1);
+  covariancematrixInverse(1, 1) = covariancematrix(0, 0);
   covariancematrixInverse(0, 1) = -covariancematrix(0, 1);
   covariancematrixInverse(1, 0) = -covariancematrix(1, 0);
 
-  double determinant = covariancematrix(0, 0) * covariancematrix(1, 1) - covariancematrix(0, 1) * covariancematrix(1, 0);
+  double determinant = covariancematrix(0, 0) * covariancematrix(1, 1) -
+    covariancematrix(0, 1) * covariancematrix(1, 0);
   covariancematrixInverse = covariancematrixInverse / determinant;
   Rcpp::NumericVector exponent = Rcpp::pow(x/lambda, k);
   Rcpp::NumericVector exponential = Rcpp::exp(-exponent);
@@ -24,7 +26,8 @@ Rcpp::NumericVector gDensityRcpp(Rcpp::NumericVector x, Rcpp::NumericVector y,
       updateY[i] -= eps;  // Subtract eps if the entry is equal to 1
     }
   }
-  Rcpp::NumericVector gjacobianVec = k * exponent * exponential/(Rcpp::dnorm4(Rcpp::qnorm5(updateY)) * x * sigma + eps);
+  Rcpp::NumericVector gjacobianVec = k * exponent *
+    exponential/(Rcpp::dnorm4(Rcpp::qnorm5(updateY)) * x * sigma + eps);
   Rcpp::NumericVector g1Inverse = (y-mu)/sigma;
   Rcpp::NumericVector g2Inverse = Rcpp::qnorm5(updateY);
 
@@ -52,9 +55,10 @@ double negative_log_likelihood_bivariate_weibull_normal_Rcpp(Rcpp::NumericVector
                                                                 double eps = 0.001){
   int T = step1.length();
   int N = delta.length();
-  Rcpp::NumericMatrix all_probs(T,3);
+  Rcpp::NumericMatrix all_probs(T,N);
   for (int i = 0; i < N; i++) {
-      all_probs(Rcpp::_ , i) = gDensityRcpp(step1, step2, shape[i], scale[i], mu[i], sigma[i], covarianceMatrix, eps);
+      all_probs(Rcpp::_ , i) = gDensityRcpp(step1, step2, shape[i], scale[i],
+                mu[i], sigma[i], covarianceMatrix, eps);
   }
   
   Rcpp::NumericVector v(N);

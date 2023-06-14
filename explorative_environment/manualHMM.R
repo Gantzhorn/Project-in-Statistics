@@ -5,9 +5,11 @@ library(Rcpp)
 library(rmutil)
 library(microbenchmark)
 library(Matrix)
+library(numDeriv)
 library(profvis)
 
 Rcpp::sourceCpp("manualHMM.cpp")
+
 # Helper functions for bivariate weibull-normal density
 determinantCalculator <- function(Matrix){
   Matrix[1,1]*Matrix[2,2]-Matrix[2,1]*Matrix[1,2]
@@ -80,27 +82,28 @@ gDensityVec <- function(x, y, k, lambda, mu, sigma, covarianceMatrix, eps) {
 ## Simulate realisations from a Markov chain
 
 N <- 3 # Number of states
-T <- 1000 # Number of realisations
-delta <- c(1 / 3, 1 / 3, 1 / 3) # Initial distribution
-Gamma <- matrix(c(0.9, 0.05, 0.05, 0.05, 0.9, 0.05, 0.05, 0.05, 0.9), ncol = 3) # Transition probability matrix
+T <- 50000 # Number of realisations
+delta <- c(0.224, 0.653, 1-(0.224+0.653)) # Initial distribution
+Gamma <- matrix(c(0.83, 0.167, 1-(0.83+0.167), 0.13, 0.85, 1-(0.13+0.85),
+          1-(0.056+0.94), 0.056, 0.94), ncol = 3, byrow = T) # Transition probability matrix
 s <- rep(NA, times = T) # State vector
-s[1] <- sample(1:N, size = 1, prob = delta)
+s[1] <- sample.int(N, size = 1, prob = delta)
 for(t in 2:T) {
-  s[t] <- sample(1:N, size = 1, prob = Gamma[s[t - 1],])
+  s[t] <- sample(N, size = 1, prob = Gamma[s[t - 1],])
 }
 
-pal <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+proj_palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 ## Simulate realisations from an HMM
-k <- c(1, 3, 5)
-lambda <- c(1, 2, 4)
-mu <- c(-1, 0, 1.25) # Means of the state-dependent distributions
-sigma <- c(1.5, 0.75, 1) # Standard deviations of the state-dependent distributions
+k <- c(3.39, 1.74, 1.02)
+lambda <- c(1073.24, 419, 19.66)
+mu <- c(-40, 30.11, -1.39) # Means of the state-dependent distributions
+sigma <- c(104.8, 78.72, 28.11) # Standard deviations of the state-dependent distributions
 # Simulate independent data
 y1 <- rweibull(T, shape = k[s], lambda[s])
 y2 <- rnorm(T, mean = mu[s], sd = sigma[s])
 
 
-covMat <- matrix(c(1,-0.3, -0.3, 1), nrow = 2)
+covMat <- matrix(c(1,-0.9, -0.9, 1), nrow = 2)
 norm_2d <- MASS::mvrnorm(T, mu = c(0,0), Sigma = covMat, empirical = TRUE)
 
 X <- norm_2d[, 1]
@@ -293,7 +296,8 @@ fit_weibull_normal_hmmRcppDens <- function(step1, # Values in weibull observatio
                     step1 = step1,  # First observation vector
                     step2 = step2,  # Second observation vector
                     lower = c(rep(-Inf, 3), rep(0, 3), rep(0, 6), rep(0, 8)),
-                    upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)))
+                    upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)),
+                    control = list(iter.max = 500))
     }
   # Normal distribution
   mu_out <- mod$par[1:3]
@@ -318,66 +322,46 @@ fit_weibull_normal_hmmRcppDens <- function(step1, # Values in weibull observatio
   )
 }
 
-fit_weibull_normal_hmmFullRcpp <- function(step1, # Values in weibull observations
-                                           step2, # Values in normal observations
-                                           par, # Concatenation of all parameters
-                                           Gamma, #Transition probability matrix
-                                           delta, # Initial distribution
-                                           covarianceMatrix = NULL,  # Specify if the data is assumed independent in the fitting
-                                           eps = 0.001)
-{ 
-  objective_function <- function(step1, step2, par){
-    mu <- par[1:3]
-    sigma <- par[4:6]
-    # Parameter for the Weibull distribution of the second observation vector
+fit_weibull_normal_hmmFullRcpp <- function(step1, step2, par, Gamma, delta, covarianceMatrix = NULL, eps = 0.001) { 
+  objective_function <- function(par){
+    mu <- mu0 #par[1:3]
+    sigma <- sigma0#par[4:6]
     shape <- par[7:9] 
     scale <- par[10:12]
-    # S.T.P 
     Gamma <- diag(3) 
-    Gamma[!Gamma] <- par[13:18]  # Fill non-diagonal entries
-    Gamma <- Gamma / rowSums(Gamma)  # Divide by row sums
-    # Initial distribution
+    Gamma[!Gamma] <- par[13:18]
+    Gamma <- Gamma / rowSums(Gamma)
     delta <- c(par[19], par[20], 1)
     delta <- delta / sum(delta)
     
-    lik <- negative_log_likelihood_bivariate_weibull_normal_Rcpp(step1, step2, mu, sigma,
-                                                                 shape, scale, Gamma, covarianceMatrix, delta, eps)
+    lik <- negative_log_likelihood_bivariate_weibull_normal_Rcpp(step1, step2, mu, sigma, shape, scale, Gamma, covarianceMatrix, delta, eps)
     return(lik)
   }
   
-  # Transform Gamma0 and delta0 to working scale
   wGamma0 <- Gamma[!diag(3)]
   wDelta0 <- delta[-3] / delta[3]
-  par0 <- c(par,  wGamma0, wDelta0)
+  par0 <- c(par, wGamma0, wDelta0)
+  print(numDeriv::grad(objective_function, par0))
+  mod <- optim(par0, fn = objective_function, method = "L-BFGS-B",
+               lower = c(rep(-Inf, 3), rep(0, 3), rep(0, 6), rep(0, 8)),
+               upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)),
+               control = list(maxit = 500))
   
-  ## Use nlminb() to minimise the negative log-likelihood
-  mod <- nlminb(start = par0,
-                objective = objective_function,
-                step1 = step1,  # First observation vector
-                step2 = step2,  # Second observation vector
-                lower = c(rep(-Inf, 3), rep(0, 3), rep(0, 6), rep(0, 8)),
-                upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)))
-  # Normal distribution
+  print(numDeriv::grad(objective_function, mod$par))
   mu_out <- mod$par[1:3]
   sd_out <- mod$par[4:6] 
-  # Weibull distribution
   shape_out = mod$par[7:9]
   scale_out = mod$par[10:12]
-  # Transition probability matrix
   Gamma_MLE <- diag(3)
   Gamma_MLE[!Gamma_MLE] <- mod$par[13:18] 
   Gamma_MLE <- Gamma_MLE / apply(Gamma_MLE, 1, sum)
-  # Initial distribution
   delta_MLE <- c(mod$par[19], mod$par[20], 1)
   delta_MLE <- delta_MLE / sum(delta_MLE)
-  return(
-    list(mean_normal = mu_out,
-         sd_normal = sd_out,
-         shape_weibull = shape_out,
-         scale_weibull = scale_out,
-         Gamma = Gamma_MLE,
-         delta = delta_MLE)
-  )
+  
+  return(list(mean_normal = mu_out, sd_normal = sd_out, shape_weibull = shape_out,
+              scale_weibull = scale_out, Gamma = Gamma_MLE, delta = delta_MLE,
+              message = mod$message, numIter = mod$counts, numEval = NA, value = mod$value,
+              convergence = mod$convergence))
 }
 prepSimIndependent <- prepData(tibble(x = y1, y = y2), coordNames = NULL)
 
@@ -408,8 +392,8 @@ profvis({
 })
 
 # correlated fit
-manualMod3 <- fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
-                       delta0, independent = FALSE, covarianceMatrix = covMat) 
+# manualMod3 <- fit_weibull_normal_hmm(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
+#                        delta0, independent = FALSE, covarianceMatrix = covMat)
 
 manualMod3Fast <- fit_weibull_normal_hmmRcppDens(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma0,
                                                  delta0, independent = FALSE, covarianceMatrix = covMat)
@@ -499,7 +483,8 @@ hiddenStateSequence_weibullnormal <- function(step1, # Values in weibull observa
 hiddenStatesMomentu2 <- viterbi(momentuMod2)
 # hiddenstates2 <- hiddenStateSequence_weibullnormal(X_prime, Y_prime, c(mu0, sigma0, k0, lambda0), Gamma, delta)
 hiddenstates3 <- hiddenStateSequence_weibullnormal(X_prime, Y_prime,
-                                                   c(manualMod3Faster$mean_normal, manualMod3Faster$sd_normal,
+                                                   c(manualMod3Faster$mean_normal,
+                                                     manualMod3Faster$sd_normal,
                                                      manualMod3Faster$shape_weibull, manualMod3Faster$scale_weibull), 
                                                    manualMod3Faster$Gamma, delta, independent = FALSE,
                                        covMat, eps = 0.0001)
@@ -523,11 +508,6 @@ logAlpha <- function(step1,
   allProbs <- matrix(1,nrow=nbObs,ncol=N)
   
   for(state in 1:3) {
-    # step1Prob <- dweibull(step1,shape[state],scale[state])
-    # 
-    # step2Prob <- dnorm(step2,mu[state],sigma[state])
-    # # joint probability = step probability * angle probability - for now
-    # allProbs[, state] <- step1Prob*step2Prob
   allProbs[,state] <-  gDensityRcpp(step1, step2, shape[state], scale[state],
                                     mu[state], sigma[state], covarianceMatrix, eps)
   }
@@ -555,9 +535,9 @@ pseudoResiduals <- function(step1, # Values in weibull observations
   nbObs <- length(step1)
   nbStates <- N
   pStep1Mat <- matrix(NA,nbObs,nbStates)
-  #pStep2Mat <- matrix(NA,nbObs,nbStates)
+  pStep2Mat <- matrix(NA,nbObs,nbStates)
   step1Res <- rep(NA,nbObs)
-  #step2Res <- rep(NA,nbObs)
+  step2Res <- rep(NA,nbObs)
   
   la <- logAlpha(step1, step2, par, Gamma, delta, covarianceMatrix, eps)
   
@@ -568,26 +548,26 @@ pseudoResiduals <- function(step1, # Values in weibull observations
   scale <- par[10:12]
   
   for(state in 1:nbStates) {
-    integrateFunction <- function(x,y){gDensityRcpp(x, y, shape[state], scale[state],
-                 mu[state], sigma[state], covarianceMatrix, eps)}
+    # integrateFunction <- function(x,y){gDensityRcpp(x, y, shape[state], scale[state],
+    #              mu[state], sigma[state], covarianceMatrix, eps)}
     for(t in 1:nbObs) {
-      pStep1Mat[t,state] <- rmutil::int2(integrateFunction, a = c(-Inf, 0), c(step1[t], step2[t]))
+      #pStep1Mat[t,state] <- rmutil::int2(integrateFunction, a = c(-Inf, 0), c(step1[t], step2[t]))
       # # Integrate weibull
-      # pStep1Mat[t,state] <- pweibull(step1[t], shape[state], scale[state])
+      pStep1Mat[t,state] <- pweibull(step1[t], shape[state], scale[state])
       # # Integrate normal
-      # pStep2Mat[t,state] <- pnorm(step2[t], mean = mu[state], sd = sigma[state])
+      pStep2Mat[t,state] <- pnorm(step2[t], mean = mu[state], sd = sigma[state])
     }
   }
   print(pStep1Mat)
   step1Res[1] <- qnorm(delta%*%pStep1Mat[1,])
-  #step2Res[1] <- qnorm(delta%*%pStep2Mat[1,])
+  step2Res[1] <- qnorm(delta%*%pStep2Mat[1,])
   
   for(t in 2:nbObs) {
     c <- max(la[t-1,]) # cancels out below; prevents numerical errors
     a <- exp(la[t-1,]-c)
     
     step1Res[t] <- qnorm(t(a)%*%(Gamma/sum(a))%*%pStep1Mat[t,])
-    #step2Res[t] <- qnorm(t(a)%*%(Gamma/sum(a))%*%pStep2Mat[t,])
+    step2Res[t] <- qnorm(t(a)%*%(Gamma/sum(a))%*%pStep2Mat[t,])
   }
   return(list(weibullResiduals=step1Res,normalResiduals=step2Res))
 }
@@ -605,3 +585,117 @@ tibble(weibull = pseudoResidualsWeibullNormal$weibullResiduals,
   pivot_longer(cols = everything(), names_to = "Variable", values_to = "pseudoResidual") %>% 
   ggplot(aes(sample = pseudoResidual)) + geom_qq() + geom_qq_line() +
   facet_wrap(~ Variable) +  labs(x = "Theoretical Quantiles", y = "Observed Quantiles")
+
+# Classification etc.
+numSim <- 20
+# Initiliaze vectors and lists to hold data
+# Classification
+classificationCheck <- numeric(numSim)
+classificationCheckCorrelatedFit <- numeric(numSim)
+
+# Bias in estimation
+biashorizontal_stepsCheckList <- vector("list", numSim)
+biasvertical_stepsCheckList <- vector("list", numSim)
+biasGammaCheckList <- vector("list", numSim)
+
+biashorizontal_stepsCheckListCorrelatedFit <- vector("list", numSim)
+biasvertical_stepsCheckListCorrelatedFit <- vector("list", numSim)
+biasGammaCheckListCorrelatedFit <- vector("list", numSim)
+
+
+# Set seed  for reproducability if chosen to
+set.seed(1)
+for (i in 1:numSim){
+  print(paste("Simulating: ", i, " dataset"))
+  s <- rep(NA, times = T) # State vector
+  s[1] <- sample.int(N, size = 1, prob = delta)
+  for(t in 2:T) {
+    s[t] <- sample.int(N, size = 1, prob = Gamma[s[t - 1],])
+  }
+  covMat <- matrix(c(1,-0.28, -0.28, 1), nrow = 2)
+  norm_2d <- MASS::mvrnorm(T, mu = c(0,0), Sigma = covMat, empirical = TRUE)
+  
+  X_sim <- qweibull(pnorm(norm_2d[, 1]), shape = k[s], scale = lambda[s])
+  Y_sim <- norm_2d[, 2]*sigma[s] + mu[s]
+  
+  # We will assume that we are working with a two state model.
+  Prep_dataBiasCheck <- momentuHMM::prepData(data = data.frame(horizontal_steps = X_sim,
+                                                 vertical_steps = Y_sim),
+                                                 coordNames = NULL)
+  print(paste("Fitting HMM number: ", i))
+  modBiasCheck <- suppressMessages(
+    fitHMM(data = Prep_dataBiasCheck,
+           nbStates = N,
+           dist = list(horizontal_steps = "weibull",
+                       vertical_steps = "norm"),
+           Par0 = list(horizontal_steps = c(k0, lambda0),
+                       vertical_steps = c(mu0, sigma0)))
+  )
+  
+  modBiasCheckCorrelatedFit <- fit_weibull_normal_hmmFullRcpp(X_sim, Y_sim,
+                                                  c(mu0, sigma0, k0, lambda0), Gamma0,
+                                                 delta0, covarianceMatrix = covMat, eps = 0.00000001)
+  print(paste("Fitting done: ", i))
+  decoded <- viterbi(m = modBiasCheck)
+  decodedCorrelatedFit <- hiddenStateSequence_weibullnormal(X_sim, Y_sim,
+                          c(modBiasCheckCorrelatedFit$mean_normal, modBiasCheckCorrelatedFit$sd_normal,
+                            modBiasCheckCorrelatedFit$shape_weibull, modBiasCheckCorrelatedFit$scale_weibull), 
+                          modBiasCheckCorrelatedFit$Gamma, delta, independent = FALSE,
+                          covMat, eps = 0.00000001)
+  # Classification accuracy:
+  classificationCheck[i] <- mean(decoded == s)
+  classificationCheckCorrelatedFit[i] <- mean(decodedCorrelatedFit == s)
+  
+  # Bias in estimation
+  
+  #Horizontal
+  biashorizontal_stepsCheckList[[i]] <- abs(modBiasCheck$mle$horizontal_steps -
+    matrix(c(k,lambda), ncol = N, byrow = TRUE))
+  
+  biashorizontal_stepsCheckListCorrelatedFit[[i]] <- abs(matrix(c(modBiasCheckCorrelatedFit$shape_weibull,
+                                                              modBiasCheckCorrelatedFit$scale_weibull),
+                                                           nrow = 2, byrow = TRUE) - 
+    matrix(c(k,lambda), ncol = N, byrow = TRUE))
+  
+  
+  #Vertical
+  biasvertical_stepsCheckList[[i]] <- abs(modBiasCheck$mle$vertical_steps -
+    matrix(c(mu,sigma), ncol = N, byrow = TRUE))
+  
+  biasvertical_stepsCheckListCorrelatedFit[[i]] <-  abs(matrix(c(modBiasCheckCorrelatedFit$mean_normal,
+                                                             modBiasCheckCorrelatedFit$sd_normal),
+                                                         nrow = 2, byrow = TRUE) -
+    matrix(c(mu,sigma), ncol = N, byrow = TRUE))
+  
+  biasGammaCheckList[[i]] <- abs(modBiasCheckCorrelatedFit$Gamma-Gamma)/Gamma
+}
+
+
+# Plot results
+# Classification accuracy
+tibble(x = c(classificationCheck, classificationCheckCorrelatedFit),
+       fitType = factor(rep(c("Independent", "Correlated"), each = numSim))) %>%
+  ggplot(aes(x = x, col = fitType)) + 
+  geom_density() + scale_color_manual(values = proj_palette)
+
+# Bias in estimates
+# Combinations of row and col are the two last arguments of lapply
+tibble(x = c(unlist(lapply(biashorizontal_stepsCheckList, "[", 1, 3)),
+       unlist(lapply(biashorizontal_stepsCheckListCorrelatedFit, "[", 1, 3))),
+       fitType = factor(rep(c("Independent", "Correlated"), each = numSim))) %>%
+  ggplot(aes(x = x, col = fitType)) + 
+  geom_density() + scale_color_manual(values = proj_palette)
+
+# Bias of transistion probability matrix
+tibble(p11 = unlist(lapply(dummy$biasGammaCheckList, "[", 1, 1)),
+       p12 = unlist(lapply(dummy$biasGammaCheckList, "[", 1, 2)),
+       p13 = unlist(lapply(dummy$biasGammaCheckList, "[", 1, 3)),
+       p21 = unlist(lapply(dummy$biasGammaCheckList, "[", 2, 1)),
+       p22 = unlist(lapply(dummy$biasGammaCheckList, "[", 2, 2)),
+       p23 = unlist(lapply(dummy$biasGammaCheckList, "[", 2, 3)),
+       p31 = unlist(lapply(dummy$biasGammaCheckList, "[", 3, 1)),
+       p32 = unlist(lapply(dummy$biasGammaCheckList, "[", 3, 2)),
+       p33 = unlist(lapply(dummy$biasGammaCheckList, "[", 3, 3))) %>% 
+  pivot_longer(cols = everything(), names_to = "Transition", values_to = "Estimate") %>% 
+  ggplot(aes(x = Estimate)) + geom_density(fill = proj_palette[5]) + 
+  facet_wrap(~Transition, scale = "free")
