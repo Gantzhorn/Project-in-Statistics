@@ -5,6 +5,7 @@ library(gridExtra)
 library(tseries)
 library(microbenchmark)
 theme_set(theme_bw())
+plotPath <-  "/home/anders/Desktop/Skole/Blok 4 - 2023/Project in Statistics/Project-in-Statistics/latex/figures"
 
 
 proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
@@ -275,13 +276,13 @@ print(paste("Fitting done: ", i))
 classificationCheck[i] <- classificationAccuracy(decodedstates =  viterbi(m = modBiasCheck),
                                                  toyData = BiasCheckSim$s)
 # Bias in estimation
-biashorizontal_stepsCheckList[[i]] <- modBiasCheck$mle$horizontal_steps -
-  matrix(simdistributionArguments[[1]], ncol = N, byrow = TRUE)
+biashorizontal_stepsCheckList[[i]] <- abs(modBiasCheck$mle$horizontal_steps -
+  matrix(simdistributionArguments[[1]], ncol = N, byrow = TRUE))
 
-biasvertical_stepsCheckList[[i]] <- modBiasCheck$mle$vertical_steps -
-  matrix(simdistributionArguments[[2]], ncol = N, byrow = TRUE)
+biasvertical_stepsCheckList[[i]] <- abs(modBiasCheck$mle$vertical_steps -
+  matrix(simdistributionArguments[[2]], ncol = N, byrow = TRUE))
 
-biasGammaCheckList[[i]] <- modBiasCheck$mle$gamma-Gamma
+biasGammaCheckList[[i]] <- abs(modBiasCheck$mle$gamma-Gamma)
 
 # Confidence intervals
 # Parameters for observed states:
@@ -317,11 +318,17 @@ return(
   )
 }
 
-dummy <- simStudyHMM(numSim = 10, observationsPerSim =  500, delta = delta, Gamma = Gamma, 
+dummy <- simStudyHMM(numSim = 50, observationsPerSim =  500, delta = delta, Gamma = Gamma, 
             simDistributions = c("rweibull", "rnorm"),
             simdistributionArguments = list(c(k, lambda), c(mu, sigma)),
             fitDistributions = c("weibull", "norm"),
             fitDistributionArguments = list(c(k0, lambda0), c(mu0, sigma0)), seed = FALSE)
+# Bias in estimates
+# Combinations of row and col are the two last arguments of lapply
+tibble(x = unlist(lapply(dummy$biashorizontal_stepsCheckList, "[", 1, 1))) %>% ggplot(aes(x = x)) +
+  geom_density(fill = proj_palette[6], alpha = .85)
+
+
 # Plot results
 # Classification accuracy
 tibble(x = dummy$classificationCheck) %>% ggplot(aes(x = x)) + 
@@ -331,6 +338,45 @@ tibble(x = dummy$classificationCheck) %>% ggplot(aes(x = x)) +
 # Combinations of row and col are the two last arguments of lapply
 tibble(x = unlist(lapply(dummy$biashorizontal_stepsCheckList, "[", 1, 1))) %>% ggplot(aes(x = x)) +
   geom_density(fill = proj_palette[6], alpha = .85)
+
+# Initialize empty list to hold data frames
+df_list <- list()
+
+# Loop over indices
+for(i in 1:2){
+  for(j in 1:3){
+    # Create data frames for the horizontal and vertical fits
+    df_horizontal <- tibble(x = unlist(lapply(dummy$biashorizontal_stepsCheckList, "[", i, j)),
+                            Parameter = ifelse(i == 1, "k", "lambda"),
+                            State = as.character(j))
+    
+    df_vertical <- tibble(x = unlist(lapply(dummy$biasvertical_stepsCheckList, "[", i, j)),
+                          Parameter = ifelse(i == 1, "mu", "sigma"),
+                          State = as.character(j))
+    
+    # Append the data frames to the list
+    df_list[[length(df_list) + 1]] <- df_horizontal
+    df_list[[length(df_list) + 1]] <- df_vertical
+  }
+}
+
+# Combine all the data frames in the list into one data frame
+df <- bind_rows(df_list)
+
+
+# Plot
+logbiasPlotIndependent <- ggplot(df, aes(x = abs(x))) + 
+  geom_density(col = proj_palette[6], linewidth = 1.5) +
+  facet_grid(Parameter ~ State, 
+             labeller = labeller(Parameter = c(mu = expression(l), sigma = expression()),
+                                 State = c(`1` = "State 1", `2` = "State 2", `3` = "State 3"))) +
+  labs(x = "log10 of absolute bias", y = "Density") +
+  theme(strip.text = element_text(face = "bold", size = 14),
+        legend.text = element_text(face = "bold", size = 12),
+        legend.title = element_text(face = "bold", size = 14),
+        axis.title = element_text(face = "bold", size = 12)) + scale_x_log10()
+
+ggsave("logbiasPlotIndependent.jpeg", logbiasPlotIndependent, path = plotPath, width = 10, height = 7, units = "in")
 
 # Bias of transistion probability matrix
 tibble(p11 = unlist(lapply(dummy$biasGammaCheckList, "[", 1, 1)),

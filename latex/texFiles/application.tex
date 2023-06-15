@@ -6,12 +6,12 @@ Firstly, the simple HMM with the \texttt{momentuHMM}-package had better results,
     8.32 \cdot 10^{-1} (3.52 \cdot 10^{-3}) & 1.68 \cdot 10^{-1} (3.53 \cdot 10^{-3}) & 1.90 \cdot 10^{-4} (1.79 \cdot 10^{-4})\\
     1.32 \cdot 10^{-1} (3.07 \cdot 10^{-3}) & 8.51 \cdot 10^{-1} (3.24 \cdot 10^{-3}) & 1.68 \cdot 10^{-2} (9.32 \cdot 10^{-4})\\
     3.11 \cdot 10^{-8} (1.19 \cdot 10^{-7}) & 5.64 \cdot 10^{-2} (4.13 \cdot 10^{-3}) & 9.44 \cdot 10^{-1} (4.13 \cdot 10^{-3})\\
-    \end{pmatrix}\\
+    \end{pmatrix}\label{gammaMat1}\\
     \hat{\delta} &= \begin{pmatrix}
         2.24 \cdot 10^{-1} (3.07 \cdot 10^{-2}) &
         6.53 \cdot 10^{-1} (3.34 \cdot 10^{-2}) &
         1.23 \cdot 10^{-1} (1.51 \cdot 10^{-2})
-    \end{pmatrix}^\top
+    \end{pmatrix}^\top \label{deltaVec1}
     \end{align}
 \begin{table}[h]
     \centering
@@ -87,7 +87,7 @@ These estimated densities are a first look into an assessement of our models. Fo
     \begin{minipage}[b]{0.49\textwidth}
       \includegraphics[width=\textwidth]{figures/vertical_stepsQQRes.jpeg}
     \end{minipage}
-    \caption{QQ-plots for the resiudals of both varialbes}
+    \caption{QQ-plots for the resiudals of both variables}
     \label{combinedQQPlots}
 \end{figure}\\
 Obviously, the seems to be something that the model does not capture. The distribution of the empirical quantiles for the horizontal- and vertical steps are more light- and heavy tailed respectively. However, as the transparency of the points hint at, there are only a few points in the worst areas. To illustrate this in another way, we calculate key quantiles and compare them to the quantiles of the standard gaussian distribution.
@@ -114,11 +114,88 @@ So the empirical quantiles is not as far of that of a standard gaussian as the Q
   \begin{minipage}[b]{0.34\textwidth}
     \includegraphics[width=\textwidth]{figures/acfVerticalPseudoResiduals.jpeg}
   \end{minipage}
-  \caption{QQ-plots for the residuals of both variables}
+  \caption{Autocorrelation as a function of lag in the initial model}
   \label{combinedACFPlots}
 \end{figure}\\
 We see that there is some significant autocorrelation that the model has not captured. In particular for the horizontal pseudoresiduals the autocorrelation is larger than our chosen significance level of $\pm 0.025$. Especially the observation at lag 1\newpage
 \subsection{Simulating from hidden markov models without conditional independence}
 We recommence as described in sections \ref{eagleImitation} and \ref{simHMM}. What we already noted in these section is that by looking at the tables \ref{correlationTable} and \ref{correlatedEagleTable} as well as the figures
 \ref{correlationEagleDensities} and \ref{correlationDensities1} we can see that we have developed a powerful method of marginally getting any distribution we want with (sort of) the correlation we would like.
-\subsubsection{}
+\subsubsection{Numerical likelihood without conditional independence}\label{numericalLikelihoodNoIndepende}
+Unsurprisingly, \texttt{momentuHMM::fitHMM} does not come with a built-in method for the numerical likelihood of our somewhat complex density from appendix \ref{weibullGaussianAppendix}. We therefore implement the likelihood ourselves, however it is done analagously to \cite{momentuHMM}. The full implementation of this select code is in appendix \ref{sourceCodeImplementation}. During development we extensively tested the code. For starters with \cite{numDeriv}, we checked that the implemented gradients numerically match our findings in appendix \ref{weibullGaussianAppendix}. Furthermore, we find with \cite{profvis} that the bottleneck is the computation of the likelihood via the forward algorithm. That is why this and the density calculation was moved to C++, eventually \cite{Rcpp}. In addition, we test via fine Riemann sums that the weibull-normal density in appendix \ref{densityImplementation} in fact is implemented as a density. These tests all give positive results. However, as the following results will show, minimizing the likelihood of this object is quite demanding. In our simulation study, we simulate markov chains with length $500$ according to (\ref{gammaMat1}) and (\ref{deltaVec1}). We then sample the observed states as described in section \ref{correlatedVariables} with the parameters from table \ref{estimParam1} and a correlation of $\rho = -0.9$. This we do $50$ times and calculate the absolute bias to the true parameters
+\begin{figure}[h]
+  \centering
+  \includegraphics[scale = .12]{figures/logbiasPlot.jpeg}
+  \caption{Distribution of the logarithm of the absolute bias stratified to state, parameter and type of model}
+\end{figure}\\
+As we have biases on vastly different orders of magnitude, we display our results on a log-scale. Our results indicate that the bias is generally lower for the correlated model, although the conditionally independent fit outperforms the correlated model significantly for the Weibull distribution's $\lambda$ parameter. The comparison to \texttt{momentuHMM::fitHMM} might not be completely fair as the implementations can be somewhat different in nature. However, according to the documentation and vignette \cite{momentuHMM} the methods uses \texttt{stats::optim} \cite{RLang}. Therefore this is also what we do. On the contrary, there might be various things in the implementation that makes the optimization more robust in \texttt{momentuHMM}  and these facts might be reasons why we are having troubles optimizing for some of the parameters. Still, repeating the above experiment with conditionally independent samples, but otherwise same structure and parameters as just described reveals something integral. As figure \ref{logbiasPlotIndependent} reveals the bias is non-existent, even with an elementary fit using \texttt{momentuHMM::fitHMM}. Recalling that the correlated data was constructed such that it marginally imitated the exact distributions \texttt{momentuHMM::fitHMM} are supposed to fit. This insight is crucial. It reveals that if the assumption of conditional independence is violated our our ability to accurately identify the parameters substantially impacted, even when using the true models.
+\subsection{Imitating the golden eagle data with varying correlation}
+Continuing, we simulate as described in section \ref{eagleImitation}. We imitate the eagle data with controlled correlation as depicted on figure \ref{correlationEagleDensities} in appendix \ref{simstudyappendix}. During fitting we have to extra carefully initialize the optimization, with care we are able to get a fit as described in section \ref{numericalLikelihoodNoIndepende}. We implement methods to compute formula (\ref{pseudoresidualsFormula}) via the log forward probabilites depict the results for $\rho = 0.2$. We quickly realize, that our model is not enough to capture the structure of the data. The jarque-bera test statistic is $40.3$ for the vertical and $150.2$ for the horizontal; again more than crictial for the hypothesis. On the positive side however, it is not as far of as we found in figure \ref{combinedQQPlots}; looking at the QQ-plot of the pseudoresiduals on figure \ref{combinedQQPlots}in appendix \ref{auxiliaryResultsModelling}. In addition, the more flexible model has decreased the autocorrelation significantly
+\begin{figure}[h]
+  \centering
+  \begin{minipage}[b]{0.34\textwidth}
+    \includegraphics[width=\textwidth]{figures/acfHorizontalPseudoResiduals1.jpeg}
+  \end{minipage}
+  \hspace{0.03\textwidth}
+  \begin{minipage}[b]{0.34\textwidth}
+    \includegraphics[width=\textwidth]{figures/acfVerticalPseudoResiduals1.jpeg}
+  \end{minipage}
+  \caption{Autocorrelation over lag in the more flexible model on the imitated eagle data.}
+  \label{combinedACFPlotsImitated}
+\end{figure}\\
+Note again that we have removed the value at lag 0. Still, there is some correlation left in the model that is not captured here.
+\subsection{Fitting the eagle data with the weibull-normal density}
+As we have not been able to implement a procedure for letting $\rho$ depend on the state. We will rely on a bit more of an ad-hoc approach to pick $\rho$. We calculate the sample correlation between the variables, which we found to be $\hat{\rho} = -0.28$. Confer table \ref{correlatedEagleTable} this approximately correspond to model with a correlation in our covariance matrix of $\rho = -0.1$. This yields the estimates 
+\begin{align}
+\hat{\Gamma_2} = 
+\begin{pmatrix}
+0.992349403 & 0.005065184 & 0.002585413 \\
+0.004792557 & 0.988887895 & 0.006319548 \\
+0.003527262 & 0.046937101 & 0.949535637 \\
+\end{pmatrix}\label{gammaMat2}
+\end{align}
+\begin{align}
+  \hat{\delta_2} = 
+  \left(0.3463771 \quad 0.3072458 \quad 0.3463771 \right)^\top
+\end{align}\\
+Compared to (\ref{gammaMat1}) there is much more persistence within states for (\ref{gammaMat2}). This might have to do to with the segments being relatively short, why many of the chains might not reach their stationary distributions. Our fitting assumes one long chain and we do therefore not take this into account. On the contrary the MLE for the observed states are now
+\begin{table}[h]
+  \centering
+  \begin{tabular}{lccc}
+   & \textbf{State 1} & \textbf{State 2} & \textbf{State 3} \\
+  \hline
+   $\hat{k}$ & 2.2311263 & 1.3645765 & 0.8443845 \\
+   $\hat{\lambda}$ & 1035.86750 & 431.30056 & 25.77084 \\
+   $\hat{\mu}$ & -27.271328 & 1.951697 & -1.554689 \\
+   $\hat{\sigma}$ & 117.91170 & 88.23672 & 30.81716 \\
+  \end{tabular}
+  \caption{Summary of Parameter Estimates}
+  \label{ParameterEstimatesNew}
+\end{table}\\
+Where we have reverted back to the generic state names briefly, because these give rise to new mean and variances. (see table \ref{finalFitMeans} in appendix \ref{auxiliaryResultsModelling}). Looking at these values it is clear that our earlier naming convention might be challenged a bit. In particular, does the mean of the soaring state not as clearly indicate an increase in altitude.  However, since these act mostly as labels, we keep the names regardless. Depicting the marginal distributions after state resembles figure \ref{combinedDensityPlotsInitialFit}
+\begin{figure}[h]
+  \centering
+  \begin{minipage}[b]{0.49\textwidth}
+    \includegraphics[width=\textwidth]{figures/xCombinedDensityCorrelated.jpeg}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[b]{0.49\textwidth}
+    \includegraphics[width=\textwidth]{figures/yCombinedDensityCorrelated.jpeg}
+  \end{minipage}
+  \caption{The marginal distribution of the observed sequence according to our final fit}
+  \label{combinedDensityPlotsFinalFit}
+\end{figure}\\
+Apart from the fact that we might capture smaller horizontal steps better. Yet, as we noted this can be difficult to see properly. Instead we calculate and do a QQ-plot of the pseudoresiduals
+\begin{figure}[h]
+  \centering
+  \begin{minipage}[b]{0.49\textwidth}
+    \includegraphics[width=\textwidth]{figures/pseudoResRealFitCorrelatedWeibull.jpeg}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[b]{0.49\textwidth}
+    \includegraphics[width=\textwidth]{figures/pseudoResRealFitCorrelatedNormal.jpeg}
+  \end{minipage}
+  \caption{QQ-plots for the resiudals of both variables in the final model}
+  \label{combinedQQPlotsFinal}
+\end{figure}\\
+We see that there is still some trend in the model that we are not capturing. However, in particular for the horizontal steps this looks a bit better. Unfortunately, the new model did not improve on the autocorrelation  we saw in figure \ref{combinedACFPlots}, which the new plot resembles very closely.

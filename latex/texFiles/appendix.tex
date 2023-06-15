@@ -1,5 +1,5 @@
 \section{Source code}\label{sourceCode}
-The source code for this project is in the Github repository be the name of \href{https://github.com/Gantzhorn/Project-in-Statistics}{Project-In-Statistics}. The owner of the repository is \textit{Gantzhorner}.
+The source code for this project is in the Github repository by the name of \href{https://github.com/Gantzhorn/Project-in-Statistics}{Project-In-Statistics}. The owner of the repository is \textit{Gantzhorner}. Do note that it it licensed under the GNU General Public License v3.0. Select source code is shown in appendix \ref{sourceCodeImplementation}.
 \section{Summary statistics and marginal distributions for the golden eagle data}\label{summarStatistics}
 \begin{table}[ht]
     \centering
@@ -96,7 +96,7 @@ This part shows different additional plots and graphs found in the modelling and
       \textbf{State 3} & 19.47 & 19.02 & -1.39 & 28.11 \\ 
        \hline
     \end{tabular}
-    \caption{Mean of the initial fit for each dimension and state}
+    \caption{Mean and standard deviation of the final fit for each dimension and state}
     \label{initialFitMeans}
 \end{table}
 \begin{figure}[h]
@@ -109,11 +109,46 @@ This part shows different additional plots and graphs found in the modelling and
 \newpage
 \begin{figure}[h]
     \begin{center}
-        \includegraphics[scale = .14]{figures/horizontalStepsCombinedDistributionInitialFitZoom.jpeg}
+        \includegraphics[scale = .1]{figures/horizontalStepsCombinedDistributionInitialFitZoom.jpeg}
     \end{center}
     \caption{Zoom of marginal distribution of the horizontal steps}
     \label{zoomHorizontal}
 \end{figure}
+\subsection{Simulating from hidden markov models without conditional independence}
+\begin{figure}[h]
+  \centering
+  \includegraphics[scale = .12]{figures/logbiasPlotIndependent.jpeg}
+  \caption{The logarithm of the absolute bias after state and parameter of the conditionally independent simulated data}
+  \label{logbiasPlotIndependent}
+\end{figure}\newpage
+\subsection{Imitating the golden eagle data with varying correlation}
+\begin{figure}[h]
+  \centering
+  \begin{minipage}[b]{0.49\textwidth}
+    \includegraphics[width=\textwidth]{figures/pseudoResidualsWeibullNormal1.jpeg}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[b]{0.49\textwidth}
+    \includegraphics[width=\textwidth]{figures/pseudoResidualsWeibullNormal2.jpeg}
+  \end{minipage}
+  \caption{QQ-plots for the pseudoresiudals of both variables in the model with correlation}
+  \label{combinedQQPlotsCorrelation}
+\end{figure}
+\subsection{Fitting the eagle data with the weibull-normal density}
+\begin{table}[ht]
+  \centering
+  \begin{tabular}{lcccc}
+    \hline
+    & $\mathbb{E}\left[X\right]$ & $\sigma_X$ & $\mathbb{E}\left[Y\right]$ & $\sigma_Y$ \\ 
+    \hline
+    \textbf{State 1} & 917.45 & 434.71 & -27.27 & 117.91 \\ 
+    \textbf{State 2} & 394.76 & 292.61 & 1.95 & 88.24 \\ 
+    \textbf{State 3} & 28.15 & 33.50 & -1.55 & 30.82 \\ 
+     \hline
+  \end{tabular}
+  \caption{Mean and standard deviation of the initial fit for each dimension and state}
+  \label{finalFitMeans}
+\end{table}
 \newpage
 \section{Finding the density of the Weibull-Gaussian distribution}\label{weibullGaussianAppendix}
 To find the density of the Weibull-Gaussian distribution, we let $(X_1, X_2)$ be bivariate gaussian with mean vector, $\xi = \mathbf{0}$ and covariance matrix $\Sigma = \begin{pmatrix}
@@ -153,7 +188,142 @@ Differentiating and setting into the definition of the jacobian yields:
 \end{align}
 where $\varphi$ is the density of the standard normal distribution. We can then obtain the density by combining above formulae.
 \newpage
-\section{Benchmark for various implementations}
+\section{Benchmark for various implementations}\label{sourceCodeImplementation}
+\subsection{Implementation of bivariate weibull-normal density in C++}\label{densityImplementation}
+\begin{lstlisting}[language=C++]
+    #include <Rcpp.h>
+    // [[Rcpp::export]]
+    Rcpp::NumericVector gDensityRcpp(
+        Rcpp::NumericVector x, Rcpp::NumericVector y,
+        double k, double lambda,
+        double mu, double sigma,
+        Rcpp::NumericMatrix covariancematrix,
+        double eps) {
+      int n = x.length();
+      Rcpp::NumericMatrix covariancematrixInverse(2, 2);
+      covariancematrixInverse(0, 0) = covariancematrix(1, 1);
+      covariancematrixInverse(1, 1) = covariancematrix(0, 0);
+      covariancematrixInverse(0, 1) = -covariancematrix(0, 1);
+      covariancematrixInverse(1, 0) = -covariancematrix(1, 0);
+    
+      double determinant = covariancematrix(0, 0) * covariancematrix(1, 1) -
+        covariancematrix(0, 1) * covariancematrix(1, 0);
+      covariancematrixInverse = covariancematrixInverse / determinant;
+      Rcpp::NumericVector exponent = Rcpp::pow(x/lambda, k);
+      Rcpp::NumericVector exponential = Rcpp::exp(-exponent);
+    
+      Rcpp::NumericVector updateY = 1-exponential;
+      for (int i = 0; i < n; i++) {
+        if (updateY[i] == 0) {
+          updateY[i] += eps;  // Add eps if the entry is equal to 0
+        } else if (updateY[i] == 1) {
+          updateY[i] -= eps;  // Subtract eps if the entry is equal to 1
+        }
+      }
+      Rcpp::NumericVector gjacobianVec = k * exponent *
+        exponential/(Rcpp::dnorm4(Rcpp::qnorm5(updateY)) * x * sigma + eps);
+      Rcpp::NumericVector g1Inverse = (y-mu)/sigma;
+      Rcpp::NumericVector g2Inverse = Rcpp::qnorm5(updateY);
+    
+    
+      Rcpp::NumericVector quadraticForm = covariancematrixInverse(0,0)*g2Inverse*g2Inverse + 
+        covariancematrixInverse(1,1)*g1Inverse*g1Inverse+
+        2*covariancematrixInverse(1,0)*g2Inverse*g1Inverse;
+      Rcpp::NumericVector density(n);
+      
+      density = 1.0/(2*3.141592653589793115997963468544185161590576171875*sqrt(determinant))*
+        gjacobianVec*Rcpp::exp(-1.0/2.0*quadraticForm);
+      return density;
+    }
+\end{lstlisting}
+\newpage
+\subsection{Implementation of the numerical likelihood in C++}
+\begin{lstlisting}[language=C++]
+    // [[Rcpp::export]]
+    double negative_log_likelihood_bivariate_weibull_normal_Rcpp(
+        Rcpp::NumericVector step1, Rcpp::NumericVector step2,
+        Rcpp::NumericVector mu, Rcpp::NumericVector sigma,
+        Rcpp::NumericVector shape, Rcpp::NumericVector scale,
+        Rcpp::NumericMatrix Gamma,Rcpp::NumericMatrix covarianceMatrix,
+        Rcpp::NumericVector delta, double  eps = 0.001){
+      int T = step1.length();
+      int N = delta.length();
+      Rcpp::NumericMatrix all_probs(T,N);
+      for (int i = 0; i < N; i++) {
+          all_probs(Rcpp::_ , i) = gDensityRcpp(step1, step2, shape[i], scale[i],
+                    mu[i], sigma[i], covarianceMatrix, eps);
+      }
+      
+      Rcpp::NumericVector v(N);
+      double llk = 0.0;
+      
+      // Initialization
+      for (int i = 0; i < N; i++) {
+        v[i] = delta[i] * all_probs(0, i);
+      }
+      
+      // Loop over time steps
+      for (int t = 1; t < T; t++) {
+        // Matrix-vector multiplication
+        for (int i = 0; i < N; i++) {
+          double sumValue = 0.0;
+          for (int j = 0; j < N; j++) {
+            sumValue += v[j] * Gamma(j, i);
+          }
+          v[i] = sumValue * all_probs(t, i);
+        }
+        
+        // Log-sum scaling
+        double sumV = sum(v);
+        llk += log(sumV);
+        v = v / sumV;
+      }
+      return -llk;
+    }    
+\end{lstlisting}
+\newpage
+\subsection{Implementation of HMM fit in R}
+\begin{lstlisting}[language = R]
+fit_weibull_normal_hmmFullRcpp <- function(step1, step2, par, Gamma, delta, covarianceMatrix = NULL, eps = 0.001) { 
+    objective_function <- function(par){
+    mu <- par[1:3]
+    sigma <- par[4:6]
+    shape <- par[7:9] 
+    scale <- par[10:12]
+    Gamma <- diag(3) 
+    Gamma[!Gamma] <- par[13:18]
+    Gamma <- Gamma / rowSums(Gamma)
+    delta <- c(par[19], par[20], 1)
+    delta <- delta / sum(delta)
+    lik <- negative_log_likelihood_bivariate_weibull_normal_Rcpp(step1, step2, mu, sigma, shape, scale, Gamma, covarianceMatrix, delta, eps)
+    return(lik)
+    }
+        
+    wGamma0 <- Gamma[!diag(3)]
+    wDelta0 <- delta[-3] / delta[3]
+    par0 <- c(par, wGamma0, wDelta0)
+    
+    mod <- optim(par0, fn = objective_function, method = "L-BFGS-B",
+    lower = c(rep(-Inf, 3), rep(0, 3), rep(0, 6), rep(0, 8)),
+    upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)),
+    control = list(maxit = 500))
+    
+    mu_out <- mod$par[1:3]
+    sd_out <- mod$par[4:6] 
+    shape_out = mod$par[7:9]
+    scale_out = mod$par[10:12]
+    Gamma_MLE <- diag(3)
+    Gamma_MLE[!Gamma_MLE] <- mod$par[13:18] 
+    Gamma_MLE <- Gamma_MLE / apply(Gamma_MLE, 1, sum)
+    delta_MLE <- c(mod$par[19], mod$par[20], 1)
+    delta_MLE <- delta_MLE / sum(delta_MLE)
+        
+    return(list(mean_normal = mu_out, sd_normal = sd_out, shape_weibull = shape_out,scale_weibull = scale_out, Gamma = Gamma_MLE, delta = delta_MLE, numIter = mod$counts, minimum = mod$value,
+            convergence = mod$convergence))
+}
+\end{lstlisting}
+\newpage
+\section{Benchmark for various implementations}\label{benchmarkSection}
 In the section we show the results of various benchmarks using \cite{microbenchmark}. The implementations were run with the following hardware and software.
 \begin{table}[ht]
     \centering
@@ -170,7 +340,6 @@ In the section we show the results of various benchmarks using \cite{microbenchm
       \hline
     \end{tabular}
   \end{table}
-  
 \subsection{Markov chain sampler}
 We compare the two markov chain samplers
 \begin{figure}[h!]
@@ -178,4 +347,4 @@ We compare the two markov chain samplers
     \includegraphics[scale = .15]{figures/markovChainSamplers.jpeg}
     \caption{The basic R markov chain sampler compared to more sophisticated C++ implementation}
     \label{markovChainRvRcpp}
-\end{figure} 
+\end{figure}

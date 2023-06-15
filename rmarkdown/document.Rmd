@@ -233,6 +233,7 @@ xtable(matrix(c(scale_params*gamma(1+1/shape_params),
 
 ```{r message = FALSE}
 # Set the number of observations for each distribution
+
 num_observations <- c(numberAfterState$n[numberAfterState$stateNum == 1], 
                       numberAfterState$n[numberAfterState$stateNum == 2], 
                       numberAfterState$n[numberAfterState$stateNum == 3])
@@ -706,7 +707,7 @@ set.seed(1)
 rhos <- c(-0.9, -0.45, -0.1, 0.9, 0.45, 0.1)
 # rhos<- seq(-0.95, 0.95, length.out = 20)
 
-#eagleCorrelation <- list()
+eagleCorrelation <- list()
 cor_vec <- numeric(length(rhos))
 for (i in seq_along(rhos)) {
   rho1 <- rhos[i]
@@ -749,6 +750,18 @@ ggsave(filename = "correlatedEaglesSim.jpeg", plot = grid.arrange(grobs = eagleC
 
 ## Now fit the original model to the simulated data
 ```{r}
+statesForSim <- simNewEagles(obsPerAnimal)
+rho1 <- 0.2
+covMat <- matrix(c(1, rho1, rho1, 1), nrow = 2)
+norm_2d <- MASS::mvrnorm(nrow(eagleData), mu = c(0, 0), Sigma = covMat, empirical = TRUE)
+  
+X <- norm_2d[, 1]
+Y <- norm_2d[, 2]
+  
+weibullNormalEagle <- tibble(horizontal_steps = qweibull(pnorm(X, 0, sqrt(covMatEagle[2,2])),
+                                                shape = weibullParameters[1, ][statesForSim],
+                                                scale = weibullParameters[2, ][statesForSim]),
+                             vertical_steps = Y*normalParameters[2, ][statesForSim]+normalParameters[1, ][statesForSim],state = factor(statesForSim))
 prepweibullNormalEagle <- momentuHMM::prepData(data = data.frame(ID = eagleData$Segment_ID,
                                        vertical_steps = weibullNormalEagle$vertical_steps,
                                        horizontal_steps = weibullNormalEagle$horizontal_steps),
@@ -758,78 +771,59 @@ eagleFit2 <- momentuHMM::fitHMM(prepweibullNormalEagle,
                    nbStates = N,
                    dist = list(horizontal_steps = "weibull",
                           vertical_steps = "norm"),
-                   Par0 = list(horizontal_steps = c(k0, lambda0),
-                          vertical_steps = c(mu0, sigma0))
+                   Par0 = list(horizontal_steps = c(weibullParameters[1, ], weibullParameters[2, ]),
+                          vertical_steps = c(normalParameters[1, ], normalParameters[2, ]))
 )
 
 decodedStatesFit2 <- viterbi(m = eagleFit2)
 
-statesForSim[decodedStatesFit2 == statesForSim] %>% table()
+statesForSim %>% table()
+
+pseudoReseagleFit2 <- momentuHMM::pseudoRes(eagleFit2)
 ```
 
 ```{r, include = FALSE}
 Rcpp::sourceCpp("/home/anders/Desktop/Skole/Blok 4 - 2023/Project in Statistics/Project-in-Statistics/explorative_environment/manualHMM.cpp")
 
-fit_weibull_normal_hmmFullRcpp <- function(step1, # Values in weibull observations
-                                           step2, # Values in normal observations
-                                           par, # Concatenation of all parameters
-                                           Gamma, #Transition probability matrix
-                                           delta, # Initial distribution
-                                           covarianceMatrix = NULL,  # Specify if the data is assumed independent in the fitting
-                                           eps = 0.001)
-{ 
-  objective_function <- function(step1, step2, par){
-  mu <- par[1:3]
-  sigma <- par[4:6]
-  # Parameter for the Weibull distribution of the second observation vector
-  shape <- par[7:9] 
-  scale <- par[10:12]
-  # S.T.P 
-  Gamma <- diag(3) 
-  Gamma[!Gamma] <- par[13:18]  # Fill non-diagonal entries
-  Gamma <- Gamma / rowSums(Gamma)  # Divide by row sums
-  # Initial distribution
-  delta <- c(par[19], par[20], 1)
-  delta <- delta / sum(delta)
+fit_weibull_normal_hmmFullRcpp <- function(step1, step2, par, Gamma, delta, covarianceMatrix = NULL, eps = 0.001) { 
+  objective_function <- function(par){
+    mu <- par[1:3]
+    sigma <- par[4:6]
+    shape <- par[7:9] 
+    scale <- par[10:12]
+    Gamma <- diag(3) 
+    Gamma[!Gamma] <- par[13:18]
+    Gamma <- Gamma / rowSums(Gamma)
+    delta <- c(par[19], par[20], 1)
+    delta <- delta / sum(delta)
+    
+    lik <- negative_log_likelihood_bivariate_weibull_normal_Rcpp(step1, step2, mu, sigma, shape, scale, Gamma, covarianceMatrix, delta, eps)
+    return(lik)
+  }
   
-  lik <- negative_log_likelihood_bivariate_weibull_normal_Rcpp(step1, step2, mu, sigma,
-                                                               shape, scale, Gamma, covarianceMatrix, delta, eps)
-  return(lik)
-}
-  
-  # Transform Gamma0 and delta0 to working scale
   wGamma0 <- Gamma[!diag(3)]
   wDelta0 <- delta[-3] / delta[3]
-  par0 <- c(par,  wGamma0, wDelta0)
+  par0 <- c(par, wGamma0, wDelta0)
   
-    ## Use nlminb() to minimise the negative log-likelihood
-  mod <- nlminb(start = par0,
-                objective = objective_function,
-                step1 = step1,  # First observation vector
-                step2 = step2,  # Second observation vector
-                lower = c(rep(-Inf, 3), rep(0, 3), rep(0, 6), rep(0, 8)),
-                upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)))
-  # Normal distribution
+  mod <- optim(par0, fn = objective_function, method = "L-BFGS-B",
+               lower = c(rep(-Inf, 3), rep(0, 3), rep(0, 6), rep(0, 8)),
+               upper = c(rep(Inf, 3), rep(Inf, 3), rep(Inf, 6), rep(1, 8)),
+               control = list(maxit = 500))
+  
   mu_out <- mod$par[1:3]
   sd_out <- mod$par[4:6] 
-  # Weibull distribution
   shape_out = mod$par[7:9]
   scale_out = mod$par[10:12]
-  # Transition probability matrix
   Gamma_MLE <- diag(3)
   Gamma_MLE[!Gamma_MLE] <- mod$par[13:18] 
   Gamma_MLE <- Gamma_MLE / apply(Gamma_MLE, 1, sum)
-  # Initial distribution
   delta_MLE <- c(mod$par[19], mod$par[20], 1)
   delta_MLE <- delta_MLE / sum(delta_MLE)
-  return(
-    list(mean_normal = mu_out,
-         sd_normal = sd_out,
-         shape_weibull = shape_out,
-         scale_weibull = scale_out,
-         Gamma = Gamma_MLE,
-         delta = delta_MLE)
-  )
+  
+  return(list(mean_normal = mu_out, sd_normal = sd_out, shape_weibull = shape_out,
+              scale_weibull = scale_out, Gamma = Gamma_MLE, delta = delta_MLE,
+              message = mod$message, numIter = mod$counts, numEval = NA, value = mod$value,
+              convergence = mod$convergence))
 }
 
 hiddenStateSequence_weibullnormal <- function(step1, # Values in weibull observations
@@ -892,15 +886,317 @@ hiddenStateSequence_weibullnormal <- function(step1, # Values in weibull observa
 }
 
 ```
-
+# Imitated eagle fit
 ```{r}
 Gamma0 <- eagleFit1$mle$gamma
 delta0 <- eagleFit1$mle$delta[1, ]
 correlatedFit <-  fit_weibull_normal_hmmFullRcpp(weibullNormalEagle$horizontal_steps, weibullNormalEagle$vertical_steps,
-                               c(mu0, sqrt(sigma0), k0, lambda0), Gamma0, delta0,
-                              covarianceMatrix = covMatEagle, 0.001)
+                               c(normalParameters[1, ], normalParameters[2, ], weibullParameters[1, ], weibullParameters[2, ]), Gamma0, delta0, covarianceMatrix = covMatEagle, 0.001)
 
 correlatedDecodedStates <- hiddenStateSequence_weibullnormal(weibullNormalEagle$horizontal_steps, weibullNormalEagle$vertical_steps, c(correlatedFit$mean_normal, correlatedFit$sd_normal, correlatedFit$shape_weibull, correlatedFit$scale_weibull), Gamma0, delta0, FALSE, covMatEagle, eps = 0.0001)
+
+logAlphaMove <- function(step1,step2,mu,sigma,k, lambda,
+                         Gamma,delta, covariancematrix, eps)
+{
+  nbObs <- length(step1)
+  lalpha <- matrix(NA,nbObs,3)
+  # probabilities of observations conditional on state
+  allProbs <- matrix(1,nrow=nbObs,ncol=3)
+  for(state in 1:3) {
+    allProbs[, state] <- gDensityRcpp(step1, step2,k[state],lambda[state],
+                                      mu[state],sigma[state], covariancematrix, eps)
+  }
+  lscale <- 0
+  v <- delta*allProbs[1,]
+  lalpha[1,] <- log(v)
+  for(t in 2:nbObs) {
+    v <- v%*%Gamma*allProbs[t,]
+    lscale <- lscale + log(sum(v))
+    v <- v/sum(v)
+    lalpha[t,] <- log(v) + lscale
+  }
+  return(lalpha)
+}
+
+pseudoResMove <- function(step1, step2 ,mu, sigma, k, lambda,
+                          Gamma,delta , covariancematrix, eps)
+{
+  nbObs <- length(step1)
+  nbStates <- 3
+  step1Mat <- matrix(NA,nbObs,nbStates)
+  step2Mat <- matrix(NA,nbObs,nbStates)
+  step1Res <- rep(NA,nbObs)
+  step2Res <- rep(NA,nbObs)
+  la <- logAlphaMove(step1,step2,mu,sigma,k,lambda,Gamma,delta, covariancematrix, eps)
+  
+  for(state in 1:nbStates) {
+    for(t in 1:nbObs) {
+      # integrate step density function
+      step1Mat[t,state] <- pweibull(step1[t],k[state],lambda[state])
+      # integrate angle density function
+      step2Mat[t,state] <- pnorm(step2[t], mu[state], sigma[state])
+    }
+  }
+  step1Res[1] <- qnorm(delta%*%step1Mat[1,])
+  step2Res[1] <- qnorm(delta%*%step2Mat[1,])
+  for(t in 2:nbObs) {
+    c <- max(la[t-1,]) # cancels out below; prevents numerical errors
+    a <- exp(la[t-1,]-c)
+    step1Res[t] <- qnorm(t(a)%*%(Gamma/sum(a))%*%step1Mat[t,])
+    step2Res[t] <- qnorm(t(a)%*%(Gamma/sum(a))%*%step2Mat[t,])
+  }
+  return(list(weibullResiduals=step1Res,normalResiduals=step2Res))
+}
+
+pseudoResidualsWeibullNormal <- pseudoResMove(weibullNormalEagle$horizontal_steps, 
+                                              weibullNormalEagle$vertical_steps,
+                                              correlatedFit$mean_normal,
+                                              correlatedFit$sd_normal,
+                                              correlatedFit$shape_weibull, 
+                                              correlatedFit$scale_weibull,
+                                              Gamma0, delta0, covMatEagle, eps = .0001)
+
+pseudoResidualsWeibullNormal1 <- tibble(weibull = pseudoResidualsWeibullNormal$weibullResiduals) %>% 
+  ggplot(aes(sample = weibull)) + 
+  geom_qq(alpha = .2) + 
+  geom_qq_line(color = "firebrick", linewidth = 1.5) +
+  labs(x = "Theoretical Quantiles (Horizontal steps)", y = "Observed Quantiles") +
+  theme_bw() +
+  theme(text = element_text(size = 12, face = "bold"), 
+        axis.title = element_text(face = "bold", size = 14),
+        plot.title = element_text(hjust = 0.5, size = 16)) 
+
+# Plot 2
+pseudoResidualsWeibullNormal2 <-  tibble(normal = pseudoResidualsWeibullNormal$normalResiduals) %>% 
+  ggplot(aes(sample = normal)) + 
+  geom_qq(alpha = .2) + 
+  geom_qq_line(color = "firebrick", linewidth = 1.5) +
+  labs(x = "Theoretical Quantiles (Vertical steps)", y = "Observed Quantiles") +
+  theme_bw() +
+  theme(text = element_text(size = 12, face = "bold"), 
+        axis.title = element_text(face = "bold", size = 14),
+        plot.title = element_text(hjust = 0.5, size = 16)) 
+
+ggsave(filename = "pseudoResidualsWeibullNormal1.jpeg", plot = pseudoResidualsWeibullNormal1, path = plotPath)
+ggsave(filename = "pseudoResidualsWeibullNormal2.jpeg", plot = pseudoResidualsWeibullNormal2, path = plotPath)
+
+# Specify the quantiles
+quantiles <- c(0.025, 0.25, 0.5, 0.75, 0.975)
+
+# Calculate the empirical quantiles for weibull residuals
+empirical_weibull <- quantile(pseudoResidualsWeibullNormal$weibullResiduals, probs = quantiles)
+
+# Calculate the empirical quantiles for normal residuals
+empirical_normal <- quantile(pseudoResidualsWeibullNormal$normalResiduals, probs = quantiles)
+
+# Calculate the theoretical quantiles of a standard normal distribution
+theoretical <- qnorm(quantiles)
+
+# Put them into a data frame
+df <- data.frame(
+  Quantile = quantiles,
+  Theoretical = theoretical,
+  Empirical_Weibull = empirical_weibull,
+  Empirical_Normal = empirical_normal
+)
+
+print(df)
+
+
+####--
+acf_vals <- acf(pseudoResidualsWeibullNormal$weibullResiduals, plot = FALSE)
+acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
+acfHorizontalPseudoResiduals1 <- ggplot(acftib[-1,], aes(x = lag, y = ACF)) +
+  geom_hline(yintercept = 0, color = "black", size = 1) +
+  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
+             color = proj_palette[3], linewidth = 1.5) +
+  geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
+  xlab("Lag (Horizontal pseudoresiduals)") +
+  ylab("") +
+  theme(plot.title = element_text(face = "bold"), 
+        axis.title = element_text(face = "bold"))
+
+acf_vals1 <-  acf(pseudoResidualsWeibullNormal$normalResiduals, plot = FALSE)
+acftib1 <- tibble(ACF = acf_vals1$acf, lag = acf_vals1$lag)
+acfVerticalPseudoResiduals1 <- ggplot(acftib1[-1,], aes(x = lag, y = ACF)) +
+  geom_hline(yintercept = 0, color = "black", size = 1) +
+  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
+             color = proj_palette[3], linewidth = 1.5) +
+  geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
+  xlab("Lag (Vertical pseudoresiduals") +
+  ylab("Autocorrelation") +
+  theme(plot.title = element_text(face = "bold"), 
+        axis.title = element_text(face = "bold"))
+
+ggsave(filename = "acfVerticalPseudoResiduals1.jpeg", plot = acfVerticalPseudoResiduals1,
+       path = plotPath)
+
+ggsave(filename = "acfHorizontalPseudoResiduals1.jpeg", plot = acfHorizontalPseudoResiduals1,
+       path = plotPath)
+```
+# Real eagle fit
+```{r}
+rhoRealEagle <- -0.1 #cor(eagleData$horizontal_steps,eagleData$vertical_steps)
+
+covMatRealEagle <- matrix(c(1,rhoRealEagle, rhoRealEagle, 1), ncol = 2, byrow = T)
+realEaglefitWeibullNormal <- fit_weibull_normal_hmmFullRcpp(eagleData$horizontal_steps,
+                                                            eagleData$vertical_steps,
+                                                            c(eagleFit1$mle$vertical_steps[1, ],
+                                                              eagleFit1$mle$vertical_steps[2, ],
+                                                              eagleFit1$mle$horizontal_steps[1, ],
+                                                              eagleFit1$mle$horizontal_steps[2, ]),
+                                                            delta = delta0, Gamma = Gamma0,
+                                                            covarianceMatrix = covMatRealEagle, eps = .00001)
+
+correlatedDecodedStates1 <- hiddenStateSequence_weibullnormal(eagleData$horizontal_steps, eagleData$vertical_steps, c(realEaglefitWeibullNormal$mean_normal, realEaglefitWeibullNormal$sd_normal, realEaglefitWeibullNormal$shape_weibull, realEaglefitWeibullNormal$scale_weibull), Gamma0, delta0, FALSE, covMatRealEagle, eps = 0.0001)
+
+eagleData <- eagleData %>% mutate(AltDecodedStates = factor(correlatedDecodedStates1))
+
+pseudoresEagleCorrelated<- pseudoResMove(eagleData$horizontal_steps, 
+                                              eagleData$vertical_steps,
+                                              realEaglefitWeibullNormal$mean_normal,
+                                              realEaglefitWeibullNormal$sd_normal,
+                                              realEaglefitWeibullNormal$shape_weibull, 
+                                              realEaglefitWeibullNormal$scale_weibull,
+                                              Gamma0, delta0, covMatEagle, eps = .0001)
+
 ```
 
+## Plot marginal weighted after state
+
+```{r}
+numberAfterStateAlt <- correlatedDecodedStates1 %>% tibble(stateNum=.) %>% group_by(stateNum) %>% count() %>% ungroup() %>% mutate(prop = n/sum(n))
+num_observations <- c(numberAfterStateAlt$n[numberAfterStateAlt$stateNum == 1], 
+                      numberAfterStateAlt$n[numberAfterStateAlt$stateNum == 2], 
+                      numberAfterStateAlt$n[numberAfterStateAlt$stateNum == 3])
+
+# Generate the x values
+x <- density(eagleData$horizontal_steps)$x
+
+# Calculate the density values for each distribution
+pdf_values <- sapply(1:N, function(i) {
+  density <- dweibull(x, shape = realEaglefitWeibullNormal$shape_weibull[i],
+                      scale = realEaglefitWeibullNormal$scale_weibull[i])
+  density <- density * numberAfterState$prop[numberAfterState$stateNum == i]
+  density
+})
+
+
+
+# Create a data frame for the density values
+df <- data.frame(x = rep(x, (N+1)),
+                 density = as.vector(cbind(pdf_values, rowSums(pdf_values))),
+                 state = factor(rep(c(1:N, "Total"), each = length(x))))
+
+# Plot the density functions using ggplot2
+xCombinedDensityCorrelated <- ggplot() +
+  geom_histogram(data = eagleData, aes(x = horizontal_steps, after_stat(density)), fill = "steelblue", col = "black", bins = 100, linewidth = 0.5, alpha = .2) +
+  geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
+            lwd = 2, alpha = 1.5) +
+  geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
+          lwd = 1, alpha = 1.5, linetype = "dashed") +
+  xlab("Horizontal steps") +
+  ylab("Density") +
+  scale_color_manual(values = proj_palette,
+                     labels = c("Gliding", "Soaring", "Perching")) +
+  theme(text = element_text(size = 14, face = "bold"),
+        legend.position = "None") +
+  coord_cartesian(xlim = c(0, 2000))
+
+ggsave("xCombinedDensityCorrelated.jpeg", plot = xCombinedDensityCorrelated, path = plotPath, width = 6, height = 4, units = "in")
+```
+
+# Now the vertical steps
+
+```{r}
+# Generate the x values
+x <- density(eagleData$vertical_steps)$x
+
+# Calculate the density values for each distribution
+pdf_values <- sapply(1:N, function(i) {
+  density <- dnorm(x, mean = realEaglefitWeibullNormal$mean_normal[i],
+                      sd = realEaglefitWeibullNormal$sd_normal[i])
+  density <- density * numberAfterState$prop[numberAfterState$stateNum == i]
+  density
+})
+
+
+
+# Create a data frame for the density values
+df <- data.frame(x = rep(x, (N+1)),
+                 density = as.vector(cbind(pdf_values, rowSums(pdf_values))),
+                 state = factor(rep(c(1:N, "Total"), each = length(x))))
+
+# Plot the density functions using ggplot2
+yCombinedDensityCorrelated <- ggplot() +
+  geom_histogram(data = eagleData, aes(x = vertical_steps, after_stat(density)), fill = "steelblue", col = "black", bins = 200, linewidth = 0.5, alpha = .2) +
+  geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
+            lwd = 2, alpha = 1.5) +
+  geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
+          lwd = 1, alpha = 1.5, linetype = "dashed") +
+  xlab("Vertical steps") +
+  ylab("Density") +
+  scale_color_manual(values = proj_palette,
+                     labels = c("Gliding", "Soaring", "Perching")) +
+  theme(text = element_text(size = 14, face = "bold")) +
+  coord_cartesian(xlim = c(-500, 500))
+
+ggsave("yCombinedDensityCorrelated.jpeg", plot = yCombinedDensityCorrelated, path = plotPath, width = 6, height = 4, units = "in")
+```
+## Residual plots
+
+```{r}
+pseudoResRealFitCorrelatedWeibull <- tibble(weibull = pseudoresEagleCorrelated$weibullResiduals[is.finite(pseudoresEagleCorrelated$weibullResiduals)]) %>% 
+  ggplot(aes(sample = weibull)) + 
+  geom_qq(alpha = .2) + 
+  geom_qq_line(color = "firebrick", linewidth = 1.5) +
+  labs(x = "Theoretical Quantiles (Horizontal steps)", y = "Observed Quantiles") +
+  theme_bw() +
+  theme(text = element_text(size = 12, face = "bold"), 
+        axis.title = element_text(face = "bold", size = 14),
+        plot.title = element_text(hjust = 0.5, size = 16)) 
+
+ggsave("pseudoResRealFitCorrelatedWeibull.jpeg", plot = pseudoResRealFitCorrelatedWeibull, path = plotPath, width = 6, height = 4, units = "in")
+
+# Plot 2
+pseudoResRealFitCorrelatedNormal <-  tibble(normal = pseudoresEagleCorrelated$normalResiduals[is.finite(pseudoresEagleCorrelated$normalResiduals)])%>% 
+  ggplot(aes(sample = normal)) + 
+  geom_qq(alpha = .2) + 
+  geom_qq_line(color = "firebrick", linewidth = 1.5) +
+  labs(x = "Theoretical Quantiles (Vertical steps)", y = "Observed Quantiles") +
+  theme_bw() +
+  theme(text = element_text(size = 12, face = "bold"), 
+        axis.title = element_text(face = "bold", size = 14),
+        plot.title = element_text(hjust = 0.5, size = 16))
+
+ggsave("pseudoResRealFitCorrelatedNormal.jpeg", plot = pseudoResRealFitCorrelatedNormal, path = plotPath, width = 6, height = 4, units = "in")
+```
+
+
+```{r}
+####--
+acf_vals <- acf(pseudoresEagleCorrelated$weibullResiduals[is.finite(pseudoresEagleCorrelated$weibullResiduals)], plot = FALSE)
+acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
+acfHorizontalPseudoResiduals1 <- ggplot(acftib[-1,], aes(x = lag, y = ACF)) +
+  geom_hline(yintercept = 0, color = "black", size = 1) +
+  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
+             color = proj_palette[3], linewidth = 1.5) +
+  geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
+  xlab("Lag (Horizontal pseudoresiduals)") +
+  ylab("") +
+  theme(plot.title = element_text(face = "bold"), 
+        axis.title = element_text(face = "bold"))
+
+acf_vals1 <-  acf(pseudoresEagleCorrelated$normalResiduals[is.finite(pseudoresEagleCorrelated$normalResiduals)], plot = FALSE)
+acftib1 <- tibble(ACF = acf_vals1$acf, lag = acf_vals1$lag)
+acfVerticalPseudoResiduals1 <- ggplot(acftib1[-1,], aes(x = lag, y = ACF)) +
+  geom_hline(yintercept = 0, color = "black", size = 1) +
+  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
+             color = proj_palette[3], linewidth = 1.5) +
+  geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
+  xlab("Lag (Vertical pseudoresiduals") +
+  ylab("Autocorrelation") +
+  theme(plot.title = element_text(face = "bold"), 
+        axis.title = element_text(face = "bold"))
+```
 
