@@ -17,21 +17,18 @@ library(plot3D)
 library(grid)
 library(ggExtra)
 library(leaflet)
-library(rayshader)
 library(rgdal)
 library(xtable)
 library(sf)
-library(rmutil)
 library(mapview)
 library(ggthemes)
-library(elevatr)
 library(raster)
 
 theme_set(theme_bw())
 proj_palette <- c("#E69F00", "#56B4E9", "#009E73",
                          "#F0E442", "#0072B2", "#D55E00",
                          "#CC79A7")
-plotPath = "/home/anders/Desktop/Skole/Blok 4 - 2023/Project in Statistics/Project-in-Statistics/latex/figures"
+#plotPath = "/home/anders/Desktop/Skole/Blok 4 - 2023/Project in Statistics/Project-in-Statistics/latex/figures"
 ```
 
 # Analysis of eagle data
@@ -50,83 +47,83 @@ eagleData <- eagleData %>% group_by(Segment_ID) %>%
 
 # Plot the tracks of the birds
 ```{r, echo = FALSE}
-allBirdsMap <- ggmap::get_stamenmap(bbox = c(left = min(eagleData$Longitude),
-                              right = -73,
-                              bottom = min(eagleData$Latitude),
-                              top = 43),
-                              maptype = "terrain-background",
-                              crop = FALSE,
-                              zoom = 9)
-USMAP <- ggmap::get_stamenmap(bbox = c(left = -125, right = -67, bottom = 24, top = 49),
-                              maptype = "terrain-background",
-                              crop = FALSE,
-                              zoom = 6)
-
-allBirdsMapZoomed <- ggmap(USMAP) + theme(axis.title = element_blank(), 
-          axis.text  = element_blank(),
-          axis.ticks = element_blank()) +
-  geom_rect(xmin = min(eagleData$Longitude), xmax =  -73, ymin =  min(eagleData$Latitude), ymax =  43,
-            fill = NA, color = "firebrick", linewidth = 0.6)
-rm(USMAP)
-allBirdsAndInset <- ggmap(allBirdsMap) +
-  geom_point(data = eagleData, aes(x = Longitude, y = Latitude, group = Segment_ID),
-             col = "black", size = 0.0001) +
-  theme(plot.title = element_text(size = 14, face = "bold"),
-        axis.text = element_text(size = 12),
-        axis.title = element_text(size = 14, face = "bold")) +
-  ggmap::inset(ggplotGrob(allBirdsMapZoomed), xmin = -76, xmax = -73, ymin = 38, ymax = 41.4) +
-  labs(x = "Longitude (°)", y = "Latitude (°)")
-allBirdsAndInset
-ggsave(filename = "allBirdTracks.jpeg", plot = allBirdsAndInset, path = plotPath, width = 12.26, height = 9.77)
+# allBirdsMap <- ggmap::get_stamenmap(bbox = c(left = min(eagleData$Longitude),
+#                               right = -73,
+#                               bottom = min(eagleData$Latitude),
+#                               top = 43),
+#                               maptype = "terrain-background",
+#                               crop = FALSE,
+#                               zoom = 9)
+# USMAP <- ggmap::get_stamenmap(bbox = c(left = -125, right = -67, bottom = 24, top = 49),
+#                               maptype = "terrain-background",
+#                               crop = FALSE,
+#                               zoom = 6)
+# 
+# allBirdsMapZoomed <- ggmap(USMAP) + theme(axis.title = element_blank(), 
+#           axis.text  = element_blank(),
+#           axis.ticks = element_blank()) +
+#   geom_rect(xmin = min(eagleData$Longitude), xmax =  -73, ymin =  min(eagleData$Latitude), ymax =  43,
+#             fill = NA, color = "firebrick", linewidth = 0.6)
+# rm(USMAP)
+# allBirdsAndInset <- ggmap(allBirdsMap) +
+#   geom_point(data = eagleData, aes(x = Longitude, y = Latitude, group = Segment_ID),
+#              col = "black", size = 0.0001) +
+#   theme(plot.title = element_text(size = 14, face = "bold"),
+#         axis.text = element_text(size = 12),
+#         axis.title = element_text(size = 14, face = "bold")) +
+#   ggmap::inset(ggplotGrob(allBirdsMapZoomed), xmin = -76, xmax = -73, ymin = 38, ymax = 41.4) +
+#   labs(x = "Longitude (°)", y = "Latitude (°)")
+# allBirdsAndInset
+# ggsave(filename = "allBirdTracks.jpeg", plot = allBirdsAndInset, path = plotPath, width = 12.26, height = 9.77)
 ```
 
 # Simple summary statistics
 
 ```{r, include = FALSE}
-eagleData %>% ungroup() %>% select(Longitude, Latitude, horizontal_steps, vertical_steps) %>% summary() %>% xtable(include.rownames = FALSE)
-
-horizontal_marginal <- eagleData %>% 
-  ggplot(aes(x = horizontal_steps)) +
-  geom_density(color = "black", fill = proj_palette[1], linewidth = 0.5) +
-  labs(y = NULL, x = "Horizontal Step Length") +
-  theme(
-    axis.text = element_text(size = 12),
-    axis.title = element_text(size = 12, face = "bold"),
-    panel.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  ) +  scale_x_log10()
-
-vertical_marginal <- eagleData %>% 
-  ggplot(aes(x = vertical_steps)) +
-  geom_density(color = "black", fill = proj_palette[2], linewidth = 0.5) +
-  labs(y = NULL, x = "Vertical Step Length") +
-  theme(
-    axis.text = element_text(size = 12),
-    axis.title = element_text(size = 12, face = "bold"),
-    panel.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  )
-
-verticalHorizontal_joint <- ggplot(eagleData, aes(x = horizontal_steps, y = vertical_steps)) +
-  stat_density_2d(aes(fill = ..level..), geom = "polygon", colour = "white") +
-  scale_fill_gradientn(colors = c(proj_palette[1], proj_palette[5])) +
-  labs(x = "Horizontal Steplength", y = "Vertical Steplength", fill = "Density") + scale_x_log10() + 
-    theme(
-    axis.text = element_text(size = 12),
-    axis.title = element_text(size = 12, face = "bold"),
-    panel.background = element_blank(),
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank()
-  ) +
-  guides(fill = guide_colorbar(title.position = "top", title.theme = element_text(face = "bold")))
-  
-
-marginalAndJointDistributions <- grid.arrange(verticalHorizontal_joint, horizontal_marginal, vertical_marginal,
-             layout_matrix = matrix(c(2, 2, 2, 2, 3, 3, 3, 3, NA, 1, 1 ,1, 1, 1, 1, NA), nrow = 2,byrow = TRUE))
-
-ggsave(filename = "horizontalAndVerticalDensities.jpeg", plot = marginalAndJointDistributions, path = plotPath)
+# eagleData %>% ungroup() %>% select(Longitude, Latitude, horizontal_steps, vertical_steps) %>% summary() %>% xtable(include.rownames = FALSE)
+# 
+# horizontal_marginal <- eagleData %>% 
+#   ggplot(aes(x = horizontal_steps)) +
+#   geom_density(color = "black", fill = proj_palette[1], linewidth = 0.5) +
+#   labs(y = NULL, x = "Horizontal Step Length") +
+#   theme(
+#     axis.text = element_text(size = 12),
+#     axis.title = element_text(size = 12, face = "bold"),
+#     panel.background = element_blank(),
+#     panel.grid.major = element_blank(),
+#     panel.grid.minor = element_blank()
+#   ) +  scale_x_log10()
+# 
+# vertical_marginal <- eagleData %>% 
+#   ggplot(aes(x = vertical_steps)) +
+#   geom_density(color = "black", fill = proj_palette[2], linewidth = 0.5) +
+#   labs(y = NULL, x = "Vertical Step Length") +
+#   theme(
+#     axis.text = element_text(size = 12),
+#     axis.title = element_text(size = 12, face = "bold"),
+#     panel.background = element_blank(),
+#     panel.grid.major = element_blank(),
+#     panel.grid.minor = element_blank()
+#   )
+# 
+# verticalHorizontal_joint <- ggplot(eagleData, aes(x = horizontal_steps, y = vertical_steps)) +
+#   stat_density_2d(aes(fill = ..level..), geom = "polygon", colour = "white") +
+#   scale_fill_gradientn(colors = c(proj_palette[1], proj_palette[5])) +
+#   labs(x = "Horizontal Steplength", y = "Vertical Steplength", fill = "Density") + scale_x_log10() + 
+#     theme(
+#     axis.text = element_text(size = 12),
+#     axis.title = element_text(size = 12, face = "bold"),
+#     panel.background = element_blank(),
+#     panel.grid.major = element_blank(),
+#     panel.grid.minor = element_blank()
+#   ) +
+#   guides(fill = guide_colorbar(title.position = "top", title.theme = element_text(face = "bold")))
+#   
+# 
+# marginalAndJointDistributions <- grid.arrange(verticalHorizontal_joint, horizontal_marginal, vertical_marginal,
+#              layout_matrix = matrix(c(2, 2, 2, 2, 3, 3, 3, 3, NA, 1, 1 ,1, 1, 1, 1, NA), nrow = 2,byrow = TRUE))
+# 
+# ggsave(filename = "horizontalAndVerticalDensities.jpeg", plot = marginalAndJointDistributions, path = plotPath)
 ```
 ## Estimation using Weibull- and Gamma distributions
 ### Weibull distribution
@@ -144,18 +141,6 @@ k_hat <- uniroot(function(k) {sum(eagleData$horizontal_steps^k * log(eagleData$h
                     c(0.1, 10))$root
 lambda_hat <- (mean(eagleData$horizontal_steps^k_hat))^(1/k_hat)
 ```
-<!-- ### Gamma distribution -->
-<!-- MLE of shape parameter in gamma distribution is the solution to the equation: -->
-<!-- $$ -->
-<!-- \log(\alpha)-\psi(\alpha) = \log\left(\frac{1}{N}\sum_{i=1}^N\log(X_i)\right)-\frac{1}{N}\sum_{i = 1}^N\log(X_i) -->
-<!-- $$ -->
-<!-- Whereas the rate parameter is given by -->
-<!-- $$\hat{\beta} = \frac{\hat{\alpha}}{\sum_{i = 1}^N X_i}$$ -->
-
-<!-- ```{r} -->
-<!-- alpha_hat <- uniroot(function(alpha) {log(alpha)-digamma(alpha)-log(mean(eagleData$horizontal_steps))+mean(log(eagleData$horizontal_steps))},c(0.1, 10))$root -->
-<!-- beta_hat <- alpha_hat/mean(eagleData$horizontal_steps) -->
-<!-- ``` -->
 
 ### Fitting the vertical steps to a normal distribution
 The MLE of the mean in the normal distribution is:
@@ -216,15 +201,15 @@ numberAfterState <- decodedStatesFit1 %>% tibble(stateNum=.) %>% group_by(stateN
 Also get the mean and variance of each of the states
 ```{r message = FALSE}
 # Set the parameters for the Weibull distributions
-shape_params <- eagleFit1$mle$horizontal_steps[1,]
-scale_params <- eagleFit1$mle$horizontal_steps[2,]
-
-matrix(c(scale_params*gamma(1+1/shape_params),eagleFit1$mle$vertical_steps[1,]), nrow = 2, byrow = T) # mean
-xtable(matrix(c(scale_params*gamma(1+1/shape_params),
-                sqrt(scale_params^2*(gamma(1+2/shape_params)-gamma(1+1/shape_params)^2)),
-                eagleFit1$mle$vertical_steps[1,],
-                eagleFit1$mle$vertical_steps[2,]), nrow = 4, byrow = T),
-                )
+# shape_params <- eagleFit1$mle$horizontal_steps[1,]
+# scale_params <- eagleFit1$mle$horizontal_steps[2,]
+# 
+# matrix(c(scale_params*gamma(1+1/shape_params),eagleFit1$mle$vertical_steps[1,]), nrow = 2, byrow = T) # mean
+# xtable(matrix(c(scale_params*gamma(1+1/shape_params),
+#                 sqrt(scale_params^2*(gamma(1+2/shape_params)-gamma(1+1/shape_params)^2)),
+#                 eagleFit1$mle$vertical_steps[1,],
+#                 eagleFit1$mle$vertical_steps[2,]), nrow = 4, byrow = T),
+#                 )
 ```
 
 ## Make the weighted density plot
@@ -234,106 +219,106 @@ xtable(matrix(c(scale_params*gamma(1+1/shape_params),
 ```{r message = FALSE}
 # Set the number of observations for each distribution
 
-num_observations <- c(numberAfterState$n[numberAfterState$stateNum == 1], 
-                      numberAfterState$n[numberAfterState$stateNum == 2], 
-                      numberAfterState$n[numberAfterState$stateNum == 3])
-
-# Generate the x values
-x <- density(eagleData$horizontal_steps)$x
-
-# Calculate the density values for each distribution
-pdf_values <- sapply(1:N, function(i) {
-  density <- dweibull(x, shape = shape_params[i], scale = scale_params[i])
-  density <- density * numberAfterState$prop[numberAfterState$stateNum == i]
-  density
-})
-
-
-
-# Create a data frame for the density values
-df <- data.frame(x = rep(x, (N+1)),
-                 density = as.vector(cbind(pdf_values, rowSums(pdf_values))),
-                 state = factor(rep(c(1:N, "Total"), each = length(x))))
-
-# Plot the density functions using ggplot2
-xCombinedDensity <- ggplot() +
-  geom_histogram(data = eagleData, aes(x = horizontal_steps, after_stat(density)), fill = "steelblue", col = "black", bins = 75, linewidth = 0.5, alpha = .2) +
-  geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
-            lwd = 2, alpha = 1.5) +
-  geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
-          lwd = 1, alpha = 1.5, linetype = "dashed") +
-  xlab("Horizontal steps") +
-  ylab("Density") +
-  scale_color_manual(values = proj_palette,
-                     labels = c("Gliding", "Soaring", "Perching")) +
-  theme(text = element_text(size = 14, face = "bold"),
-        legend.position = "None") +
-  coord_cartesian(xlim = c(0, 2000))
-
-ggsave(filename = "horizontalStepsCombinedDistributionInitialFit.jpeg",
-       plot = xCombinedDensity, path = plotPath, width = 6, height = 4, units = "in")
-
-##------------------------------------------------------------------------------------------------------#
-
-xCombinedDensityZoom <- ggplot() +
-  geom_histogram(data = eagleData, aes(x = horizontal_steps, after_stat(density)), fill = "steelblue", col = "black", bins = 1000, linewidth = 0.5, alpha = .2) +
-  geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
-            lwd = 2, alpha = 1.5) +
-  geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
-          lwd = 1, alpha = 1.5, linetype = "dashed") +
-  xlab("Horizontal steps") +
-  ylab("Density") +
-  scale_color_manual(values = proj_palette,
-                     labels = c("Gliding", "Soaring", "Perching")) +
-  theme(text = element_text(size = 14, face = "bold"),
-        legend.position = "None") +
-  coord_cartesian(xlim = c(0, 100))
-
-ggsave(filename = "horizontalStepsCombinedDistributionInitialFitZoom.jpeg",
-       plot = xCombinedDensityZoom, path = plotPath, width = 6, height = 4, units = "in")
+# num_observations <- c(numberAfterState$n[numberAfterState$stateNum == 1], 
+#                       numberAfterState$n[numberAfterState$stateNum == 2], 
+#                       numberAfterState$n[numberAfterState$stateNum == 3])
+# 
+# # Generate the x values
+# x <- density(eagleData$horizontal_steps)$x
+# 
+# # Calculate the density values for each distribution
+# pdf_values <- sapply(1:N, function(i) {
+#   density <- dweibull(x, shape = shape_params[i], scale = scale_params[i])
+#   density <- density * numberAfterState$prop[numberAfterState$stateNum == i]
+#   density
+# })
+# 
+# 
+# 
+# # Create a data frame for the density values
+# df <- data.frame(x = rep(x, (N+1)),
+#                  density = as.vector(cbind(pdf_values, rowSums(pdf_values))),
+#                  state = factor(rep(c(1:N, "Total"), each = length(x))))
+# 
+# # Plot the density functions using ggplot2
+# xCombinedDensity <- ggplot() +
+#   geom_histogram(data = eagleData, aes(x = horizontal_steps, after_stat(density)), fill = "steelblue", col = "black", bins = 75, linewidth = 0.5, alpha = .2) +
+#   geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
+#             lwd = 2, alpha = 1.5) +
+#   geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
+#           lwd = 1, alpha = 1.5, linetype = "dashed") +
+#   xlab("Horizontal steps") +
+#   ylab("Density") +
+#   scale_color_manual(values = proj_palette,
+#                      labels = c("Gliding", "Soaring", "Perching")) +
+#   theme(text = element_text(size = 14, face = "bold"),
+#         legend.position = "None") +
+#   coord_cartesian(xlim = c(0, 2000))
+# 
+# ggsave(filename = "horizontalStepsCombinedDistributionInitialFit.jpeg",
+#        plot = xCombinedDensity, path = plotPath, width = 6, height = 4, units = "in")
+# 
+# ##------------------------------------------------------------------------------------------------------#
+# 
+# xCombinedDensityZoom <- ggplot() +
+#   geom_histogram(data = eagleData, aes(x = horizontal_steps, after_stat(density)), fill = "steelblue", col = "black", bins = 1000, linewidth = 0.5, alpha = .2) +
+#   geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
+#             lwd = 2, alpha = 1.5) +
+#   geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
+#           lwd = 1, alpha = 1.5, linetype = "dashed") +
+#   xlab("Horizontal steps") +
+#   ylab("Density") +
+#   scale_color_manual(values = proj_palette,
+#                      labels = c("Gliding", "Soaring", "Perching")) +
+#   theme(text = element_text(size = 14, face = "bold"),
+#         legend.position = "None") +
+#   coord_cartesian(xlim = c(0, 100))
+# 
+# ggsave(filename = "horizontalStepsCombinedDistributionInitialFitZoom.jpeg",
+#        plot = xCombinedDensityZoom, path = plotPath, width = 6, height = 4, units = "in")
 
 ```
 
 ### For vertical steps 
 ```{r message = FALSE}
-# Set the parameters for the Weibull distributions
-mean_params <- eagleFit1$mle$vertical_steps[1,]
-sd_params <- (eagleFit1$mle$vertical_steps[2,])
+# # Set the parameters for the Weibull distributions
+# mean_params <- eagleFit1$mle$vertical_steps[1,]
+# sd_params <- (eagleFit1$mle$vertical_steps[2,])
+# 
+# # Generate the x values
+# x <- density(eagleData$vertical_steps)$x
+# 
+# # Calculate the density values for each distribution
+# pdf_values <- sapply(1:N, function(i) {
+#   density <- dnorm(x, mean = mean_params[i], sd = sd_params[i])
+#   density <- density * numberAfterState$prop[numberAfterState$stateNum == i]
+#   density
+# })
 
-# Generate the x values
-x <- density(eagleData$vertical_steps)$x
 
-# Calculate the density values for each distribution
-pdf_values <- sapply(1:N, function(i) {
-  density <- dnorm(x, mean = mean_params[i], sd = sd_params[i])
-  density <- density * numberAfterState$prop[numberAfterState$stateNum == i]
-  density
-})
-
-
-
-# Create a data frame for the density values
-df <- data.frame(x = rep(x, (N+1)),
-                 density = as.vector(cbind(pdf_values, rowSums(pdf_values))),
-                 state = factor(rep(c(1:N, "Total"), each = length(x))))
-
-# Plot the density functions using ggplot2
-yCombinedDensity <- ggplot() +
-  geom_histogram(data = eagleData, aes(x = vertical_steps, after_stat(density)), fill = "steelblue", col = "black", bins = 200, linewidth = 0.5, alpha = .2) +
-  geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
-            lwd = 2, alpha = 1.5) +
-  geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
-            lwd = 1, alpha = 1.5, linetype = "dashed") +
-  xlab("Vertical steps") +
-  ylab("") +
-  scale_color_manual(values = proj_palette,
-                    labels = c("Gliding", "Soaring", "Perching")) +
-  theme(text = element_text(size = 12, face = "bold"),
-        legend.title = element_blank()) +
-  coord_cartesian(xlim = c(-500, 500))
-
-ggsave(filename = "verticalStepsCombinedDistributionInitialFit.jpeg",
-       plot = yCombinedDensity, path = plotPath, width = 6, height = 4, units = "in")
+# 
+# # Create a data frame for the density values
+# df <- data.frame(x = rep(x, (N+1)),
+#                  density = as.vector(cbind(pdf_values, rowSums(pdf_values))),
+#                  state = factor(rep(c(1:N, "Total"), each = length(x))))
+# 
+# # Plot the density functions using ggplot2
+# yCombinedDensity <- ggplot() +
+#   geom_histogram(data = eagleData, aes(x = vertical_steps, after_stat(density)), fill = "steelblue", col = "black", bins = 200, linewidth = 0.5, alpha = .2) +
+#   geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
+#             lwd = 2, alpha = 1.5) +
+#   geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
+#             lwd = 1, alpha = 1.5, linetype = "dashed") +
+#   xlab("Vertical steps") +
+#   ylab("") +
+#   scale_color_manual(values = proj_palette,
+#                     labels = c("Gliding", "Soaring", "Perching")) +
+#   theme(text = element_text(size = 12, face = "bold"),
+#         legend.title = element_blank()) +
+#   coord_cartesian(xlim = c(-500, 500))
+# 
+# ggsave(filename = "verticalStepsCombinedDistributionInitialFit.jpeg",
+#        plot = yCombinedDensity, path = plotPath, width = 6, height = 4, units = "in")
 ```
 
 Add decoded states to the dataset
@@ -343,83 +328,83 @@ eagleData <- eagleData %>% mutate(decodedstates = factor(decodedstates))
 ```
 And plot the data stratified to the states
 ```{r message = FALSE}
-ggplot(eagleData, aes(x = horizontal_steps, y = vertical_steps, col = decodedstates)) + 
-  geom_point(alpha = 0.4) +
-  scale_color_manual(values = proj_palette,
-                     labels = c("Gliding", "Soaring", "Perching"),
-                     guide = guide_legend(override.aes = list(alpha = 1))) + 
-  scale_x_log10() + 
-  xlab("Horizontal steps") +
-  ylab("Vertical steps") + 
-  facet_wrap(~ decodedstates, ncol = 3, scale = "free_x") + 
-  theme(text = element_text(size = 14, face = "bold"),
-        legend.title = element_blank(),
-        strip.text = element_text(size = 0),
-        strip.background = element_blank())
+# ggplot(eagleData, aes(x = horizontal_steps, y = vertical_steps, col = decodedstates)) + 
+#   geom_point(alpha = 0.4) +
+#   scale_color_manual(values = proj_palette,
+#                      labels = c("Gliding", "Soaring", "Perching"),
+#                      guide = guide_legend(override.aes = list(alpha = 1))) + 
+#   scale_x_log10() + 
+#   xlab("Horizontal steps") +
+#   ylab("Vertical steps") + 
+#   facet_wrap(~ decodedstates, ncol = 3, scale = "free_x") + 
+#   theme(text = element_text(size = 14, face = "bold"),
+#         legend.title = element_blank(),
+#         strip.text = element_text(size = 0),
+#         strip.background = element_blank())
 
 ```
 
 ```{r message = FALSE}
 # Find interesting birds:
-VaryingSegmentID <- eagleData %>% 
-  group_by(Segment_ID, decodedstates) %>%
-  summarise(n = n(), .groups = "drop") %>%
-  group_by(Segment_ID) %>%
-  mutate(prop = n/sum(n)) %>%
-  ungroup() %>%
-  dplyr::select(-n) %>%
-  pivot_wider(names_from = "decodedstates", values_from = "prop") %>%
-  replace_na(list(`1` = 0, `2` = 0, `3` = 0)) %>% filter(`1`>0.2 & `2`>0.2 & `3`>0.2) %>% .$Segment_ID
+# VaryingSegmentID <- eagleData %>% 
+#   group_by(Segment_ID, decodedstates) %>%
+#   summarise(n = n(), .groups = "drop") %>%
+#   group_by(Segment_ID) %>%
+#   mutate(prop = n/sum(n)) %>%
+#   ungroup() %>%
+#   dplyr::select(-n) %>%
+#   pivot_wider(names_from = "decodedstates", values_from = "prop") %>%
+#   replace_na(list(`1` = 0, `2` = 0, `3` = 0)) %>% filter(`1`>0.2 & `2`>0.2 & `3`>0.2) %>% .$Segment_ID
 
 ```
 
 
 ```{r message = FALSE}
-AltitudeFourBirds <- eagleData %>%
-  filter(Segment_ID %in% c(48, 499, 205, 445)) %>%
-  group_by(Segment_ID) %>%
-  mutate(obsNum = row_number()) %>%
-  ggplot(aes(x = obsNum, y = Altitude)) +
-  geom_line(linewidth = 0.5) +
-  geom_point(aes(col = decodedstates)) +
-  facet_wrap(~Segment_ID, scales = "free") +
-  scale_color_manual(values = proj_palette,
-                     labels = c("Gliding", "Soaring", "Perching"),
-                     guide = guide_legend(override.aes = list(alpha = 1))) +
-    labs(x = "Time since start of segment (minutes)", y = "Altitude (MAMSL)", color = "Decoded state") +
-    theme(text = element_text(face = "bold"), 
-          strip.text = element_text(face = "bold", size = 14),
-          axis.title = element_text(face = "bold", size = 14),
-          legend.title = element_text(face = "bold", size = 14),
-          legend.text = element_text(face = "bold", size = 12)
-    )
-
-ggsave(filename = "AltitudeFourBirds.jpeg",
-       plot = AltitudeFourBirds, path = plotPath, width = 10, height = 6)
-
-
-Altitudebird539 <- eagleData %>%
-    filter(Segment_ID == 539) %>%
-    group_by(Segment_ID) %>%
-    mutate(obsNum = row_number()) %>%
-    ggplot(aes(x = obsNum, y = Altitude)) +
-    geom_line(linewidth = 0.25) +
-    geom_point(aes(col = decodedstates), size = 2.5) +
-    scale_color_manual(values = proj_palette,
-                       labels = c("Gliding", "Soaring", "Perching"),
-                       guide = guide_legend(override.aes = list(alpha = 1))) +
-    labs(x = "Time since start of segment (minutes)", y = "Altitude (MAMSL)", color = "Decoded state") +
-    theme(text = element_text(face = "bold"), 
-          strip.text = element_text(face = "bold", size = 16),
-          axis.title = element_text(face = "bold", size = 14),
-          legend.title = element_text(face = "bold", size = 14),
-          legend.text = element_text(face = "bold", size = 12)
-    ) + theme(legend.position="none")
-
-
-
-ggsave(filename = "Altitudebird539.jpeg",
-       plot = Altitudebird539, path = plotPath, width = 10, height = 6)
+# AltitudeFourBirds <- eagleData %>%
+#   filter(Segment_ID %in% c(48, 499, 205, 445)) %>%
+#   group_by(Segment_ID) %>%
+#   mutate(obsNum = row_number()) %>%
+#   ggplot(aes(x = obsNum, y = Altitude)) +
+#   geom_line(linewidth = 0.5) +
+#   geom_point(aes(col = decodedstates)) +
+#   facet_wrap(~Segment_ID, scales = "free") +
+#   scale_color_manual(values = proj_palette,
+#                      labels = c("Gliding", "Soaring", "Perching"),
+#                      guide = guide_legend(override.aes = list(alpha = 1))) +
+#     labs(x = "Time since start of segment (minutes)", y = "Altitude (MAMSL)", color = "Decoded state") +
+#     theme(text = element_text(face = "bold"), 
+#           strip.text = element_text(face = "bold", size = 14),
+#           axis.title = element_text(face = "bold", size = 14),
+#           legend.title = element_text(face = "bold", size = 14),
+#           legend.text = element_text(face = "bold", size = 12)
+#     )
+# 
+# ggsave(filename = "AltitudeFourBirds.jpeg",
+#        plot = AltitudeFourBirds, path = plotPath, width = 10, height = 6)
+# 
+# 
+# Altitudebird539 <- eagleData %>%
+#     filter(Segment_ID == 539) %>%
+#     group_by(Segment_ID) %>%
+#     mutate(obsNum = row_number()) %>%
+#     ggplot(aes(x = obsNum, y = Altitude)) +
+#     geom_line(linewidth = 0.25) +
+#     geom_point(aes(col = decodedstates), size = 2.5) +
+#     scale_color_manual(values = proj_palette,
+#                        labels = c("Gliding", "Soaring", "Perching"),
+#                        guide = guide_legend(override.aes = list(alpha = 1))) +
+#     labs(x = "Time since start of segment (minutes)", y = "Altitude (MAMSL)", color = "Decoded state") +
+#     theme(text = element_text(face = "bold"), 
+#           strip.text = element_text(face = "bold", size = 16),
+#           axis.title = element_text(face = "bold", size = 14),
+#           legend.title = element_text(face = "bold", size = 14),
+#           legend.text = element_text(face = "bold", size = 12)
+#     ) + theme(legend.position="none")
+# 
+# 
+# 
+# ggsave(filename = "Altitudebird539.jpeg",
+#        plot = Altitudebird539, path = plotPath, width = 10, height = 6)
 
 ```
 
@@ -427,10 +412,10 @@ ggsave(filename = "Altitudebird539.jpeg",
 Look at simulations from the model and whether they show similar patterns as the observed data. First we simulate from the model
 
 ```{r message = FALSE, include = FALSE}
-eagleSim <- momentuHMM::simData(nbAnimals = max(as.numeric(levels(prepEagleData$ID))),
-                                nbStates = N,
-                                model = eagleFit1,
-                                obsPerAnimal = obsPerAnimal)
+# eagleSim <- momentuHMM::simData(nbAnimals = max(as.numeric(levels(prepEagleData$ID))),
+#                                 nbStates = N,
+#                                 model = eagleFit1,
+#                                 obsPerAnimal = obsPerAnimal)
 ```
 
 Then we compare the densities qualitatively
@@ -442,72 +427,59 @@ Then we compare the densities qualitatively
 #   ggplot(aes(x = Move, fill = Data)) + geom_density() +
 #   scale_fill_manual(values = proj_palette) + facet_wrap(~Movement_type, ncol = 1, scale = "free")
 
-ggplot() + 
-  geom_histogram(data = eagleData, aes(x = horizontal_steps, y = ..density..), 
-                 fill = "steelblue", col = "black", alpha = .1, bins = 125) +
-  geom_density(data = eagleSim, aes(x = horizontal_steps), col = proj_palette[1], linewidth = 2) +
-  coord_cartesian(xlim = c(0, 2000)) + xlab("Horizontal steps") +
-    ylab("Density") +theme(text = element_text(size = 12, face = "bold"))
-
-
-ggplot() + 
-  geom_histogram(data = eagleData, aes(x = vertical_steps, y = ..density..), 
-                 fill = "steelblue", col = "black", alpha = .1, bins = 200) +
-  geom_density(data = eagleSim, aes(x = vertical_steps), col = proj_palette[2], linewidth = 2) +
-  coord_cartesian(xlim = c(-500, 500)) + xlab("Vertical steps") +
-    ylab("") +theme(text = element_text(size = 12, face = "bold"))
+# ggplot() + 
+#   geom_histogram(data = eagleData, aes(x = horizontal_steps, y = ..density..), 
+#                  fill = "steelblue", col = "black", alpha = .1, bins = 125) +
+#   geom_density(data = eagleSim, aes(x = horizontal_steps), col = proj_palette[1], linewidth = 2) +
+#   coord_cartesian(xlim = c(0, 2000)) + xlab("Horizontal steps") +
+#     ylab("Density") +theme(text = element_text(size = 12, face = "bold"))
+# 
+# 
+# ggplot() + 
+#   geom_histogram(data = eagleData, aes(x = vertical_steps, y = ..density..), 
+#                  fill = "steelblue", col = "black", alpha = .1, bins = 200) +
+#   geom_density(data = eagleSim, aes(x = vertical_steps), col = proj_palette[2], linewidth = 2) +
+#   coord_cartesian(xlim = c(-500, 500)) + xlab("Vertical steps") +
+#     ylab("") +theme(text = element_text(size = 12, face = "bold"))
 
 ```
 
 Now we compute the pseudoresiduals
 
 ```{r message = FALSE}
-pseudoReseagleFit1 <- momentuHMM::pseudoRes(eagleFit1)
-pseudoResTibble <- tibble(horizontal_stepsRes = pseudoReseagleFit1[[1]],
-                          vertical_stepsRes = pseudoReseagleFit1[[2]]
-                          ) %>% mutate(time = row_number())
-```
-
-```{r message = FALSE}
-# Chain independence:
-pseudoResTibble %>% ggplot(aes(x = time, y = horizontal_stepsRes)) +
-  geom_line(color = proj_palette[5])
-```
-
-```{r message = FALSE}
-# Histogram of residuals with standard normal distribution on top
-pseudoResTibble %>% ggplot(aes(x = vertical_stepsRes)) +
-  geom_histogram(aes(y = after_stat(density)),col = "black", fill = proj_palette[6], alpha = 0.8) + 
-  stat_function(fun = dnorm, args = list(mean = 0, sd = 1), color = proj_palette[5], linewidth = 1)
+# pseudoReseagleFit1 <- momentuHMM::pseudoRes(eagleFit1)
+# pseudoResTibble <- tibble(horizontal_stepsRes = pseudoReseagleFit1[[1]],
+#                           vertical_stepsRes = pseudoReseagleFit1[[2]]
+#                           ) %>% mutate(time = row_number())
 ```
 
 ```{r message = FALSE}
 # QQ-plot of residuals
-horizontal_stepsQQRes <-  pseudoResTibble %>% ggplot(aes(sample = horizontal_stepsRes)) + 
-  geom_qq(alpha = .2) +
-  geom_abline(intercept = 0, slope = 1, color = "firebrick", linewidth = 1.5) +
-  labs(x = "Theoretical quantile (Horizontal steps)", y = "Sample quantile", color = "Decoded state") +
-    theme(text = element_text(face = "bold"), 
-          strip.text = element_text(face = "bold", size = 16),
-          axis.title = element_text(face = "bold", size = 14),
-          legend.title = element_text(face = "bold", size = 14),
-          legend.text = element_text(face = "bold", size = 12))
-
-ggsave(filename = "horizontal_stepsQQRes.jpeg",
-       plot = horizontal_stepsQQRes, path = plotPath, width = 6, height = 4, units = "in")
-
-vertical_stepsQQRes <- pseudoResTibble %>% ggplot(aes(sample = vertical_stepsRes)) + 
-  geom_qq(alpha = .2) +
-  geom_abline(intercept = 0, slope = 1, color = "firebrick", linewidth = 1.5) +
-  labs(x = "Theoretical quantile (Vertical steps)", y = "", color = "Decoded state") +
-    theme(text = element_text(face = "bold"), 
-          strip.text = element_text(face = "bold", size = 16),
-          axis.title = element_text(face = "bold", size = 14),
-          legend.title = element_text(face = "bold", size = 14),
-          legend.text = element_text(face = "bold", size = 12))
-
-ggsave(filename = "vertical_stepsQQRes.jpeg",
-       plot = vertical_stepsQQRes, path = plotPath, width = 6, height = 4, units = "in")
+# horizontal_stepsQQRes <-  pseudoResTibble %>% ggplot(aes(sample = horizontal_stepsRes)) + 
+#   geom_qq(alpha = .2) +
+#   geom_abline(intercept = 0, slope = 1, color = "firebrick", linewidth = 1.5) +
+#   labs(x = "Theoretical quantile (Horizontal steps)", y = "Sample quantile", color = "Decoded state") +
+#     theme(text = element_text(face = "bold"), 
+#           strip.text = element_text(face = "bold", size = 16),
+#           axis.title = element_text(face = "bold", size = 14),
+#           legend.title = element_text(face = "bold", size = 14),
+#           legend.text = element_text(face = "bold", size = 12))
+# 
+# ggsave(filename = "horizontal_stepsQQRes.jpeg",
+#        plot = horizontal_stepsQQRes, path = plotPath, width = 6, height = 4, units = "in")
+# 
+# vertical_stepsQQRes <- pseudoResTibble %>% ggplot(aes(sample = vertical_stepsRes)) + 
+#   geom_qq(alpha = .2) +
+#   geom_abline(intercept = 0, slope = 1, color = "firebrick", linewidth = 1.5) +
+#   labs(x = "Theoretical quantile (Vertical steps)", y = "", color = "Decoded state") +
+#     theme(text = element_text(face = "bold"), 
+#           strip.text = element_text(face = "bold", size = 16),
+#           axis.title = element_text(face = "bold", size = 14),
+#           legend.title = element_text(face = "bold", size = 14),
+#           legend.text = element_text(face = "bold", size = 12))
+# 
+# ggsave(filename = "vertical_stepsQQRes.jpeg",
+#        plot = vertical_stepsQQRes, path = plotPath, width = 6, height = 4, units = "in")
 ```
 
 ```{r}
@@ -525,118 +497,101 @@ xtable(matrix(c(qnorm(p = quantilePoints),
 
 ```{r message = FALSE}
 # Make autocorrelation plots
-acf_vals <- acf(pseudoResTibble$vertical_stepsRes[is.finite(pseudoResTibble$vertical_stepsRes)], plot = FALSE)
-acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
-acfVerticalPseudoResiduals <- ggplot(acftib[-1,], aes(x = lag, y = ACF)) +
-  geom_hline(yintercept = 0, color = "black", size = 1) +
-  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
-             color = proj_palette[3], linewidth = 1.5) +
-  geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
-  xlab("Lag (Vertical pseudoresiduals") +
-  ylab("") +
-  theme(plot.title = element_text(face = "bold"), 
-        axis.title = element_text(face = "bold"))
-
-acf_vals1 <-  acf(pseudoResTibble$horizontal_stepsRes[is.finite(pseudoResTibble$horizontal_stepsRes)], plot = FALSE)
-acftib1 <- tibble(ACF = acf_vals1$acf, lag = acf_vals1$lag)
-acfHorizontalPseudoResiduals <- ggplot(acftib1[-1,], aes(x = lag, y = ACF)) +
-  geom_hline(yintercept = 0, color = "black", size = 1) +
-  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
-             color = proj_palette[3], linewidth = 1.5) +
-  geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
-  xlab("Lag (Horizontal pseudoresiduals") +
-  ylab("Autocorrelation") +
-  theme(plot.title = element_text(face = "bold"), 
-        axis.title = element_text(face = "bold"))
-
-ggsave(filename = "acfVerticalPseudoResiduals.jpeg", plot = acfVerticalPseudoResiduals,
-       path = plotPath)
-
-ggsave(filename = "acfHorizontalPseudoResiduals.jpeg", plot = acfHorizontalPseudoResiduals,
-       path = plotPath)
+# acf_vals <- acf(pseudoResTibble$vertical_stepsRes[is.finite(pseudoResTibble$vertical_stepsRes)], plot = FALSE)
+# acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
+# acfVerticalPseudoResiduals <- ggplot(acftib[-1,], aes(x = lag, y = ACF)) +
+#   geom_hline(yintercept = 0, color = "black", size = 1) +
+#   geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
+#              color = proj_palette[3], linewidth = 1.5) +
+#   geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
+#   xlab("Lag (Vertical pseudoresiduals)") +
+#   ylab("") +
+#   theme(plot.title = element_text(face = "bold"), 
+#         axis.title = element_text(face = "bold"))
+# 
+# acf_vals1 <-  acf(pseudoResTibble$horizontal_stepsRes[is.finite(pseudoResTibble$horizontal_stepsRes)], plot = FALSE)
+# acftib1 <- tibble(ACF = acf_vals1$acf, lag = acf_vals1$lag)
+# acfHorizontalPseudoResiduals <- ggplot(acftib1[-1,], aes(x = lag, y = ACF)) +
+#   geom_hline(yintercept = 0, color = "black", size = 1) +
+#   geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
+#              color = proj_palette[3], linewidth = 1.5) +
+#   geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
+#   xlab("Lag (Horizontal pseudoresiduals)") +
+#   ylab("Autocorrelation") +
+#   theme(plot.title = element_text(face = "bold"), 
+#         axis.title = element_text(face = "bold"))
+# 
+# ggsave(filename = "acfVerticalPseudoResiduals.jpeg", plot = acfVerticalPseudoResiduals,
+#        path = plotPath, height = 4, width = 6, units = "in")
+# 
+# ggsave(filename = "acfHorizontalPseudoResiduals.jpeg", plot = acfHorizontalPseudoResiduals,
+#        path = plotPath, height = 4, width = 6, units = "in")
 ```
 
 ## Plot a few individual birds
 ### Using mapview
 ```{r message = FALSE}
  # Find segment with the most observations:
-favourite_bird <- eagleData %>% group_by(Segment_ID) %>% summarise(n = n()) %>% ungroup() %>% 
-  slice_max(n) %>% .$Segment_ID
-
-
-favourite_birdTibble <- eagleData %>% filter(Segment_ID == 539)
-favourite_birdTibble <- favourite_birdTibble %>% 
-  mutate(decodedstates = recode(decodedstates,
-                                `1` = "Gliding",
-                                `2` = "Soaring",
-                                `3` = "Perching"))
-
-proj_palette1 <- proj_palette[1:3]
-names(proj_palette1) <- unique(favourite_birdTibble$decodedstates)
-
-# Create a color palette function
-colorPalette <- colorFactor(proj_palette1, favourite_birdTibble$decodedstates)
-
-# Create the map
-leaflet_map <-  leaflet(favourite_birdTibble) %>%
-  addProviderTiles(providers$Esri.WorldImagery) %>%
-  addPolylines(lng = ~Longitude, lat = ~Latitude, color = "black") %>%
-  addCircleMarkers(lng = ~Longitude, lat = ~Latitude, radius = 5,
-                   color = ~colorPalette(decodedstates),
-                   fillColor = ~colorPalette(decodedstates),
-                   fillOpacity = 1,
-                   popup = ~decodedstates) %>%
-  addLegend("topleft", colors = proj_palette1,
-            title = "<b>Decoded State",
-            labels = paste("<b>", names(proj_palette1), "</b>"),
-            opacity = 1) %>% 
-  addScaleBar(position = "bottomright",
-              options = scaleBarOptions(metric = TRUE, imperial = FALSE, maxWidth = 200))
+# favourite_bird <- eagleData %>% group_by(Segment_ID) %>% summarise(n = n()) %>% ungroup() %>% 
+#   slice_max(n) %>% .$Segment_ID
+# 
+# 
+# favourite_birdTibble <- eagleData %>% filter(Segment_ID == 539)
+# favourite_birdTibble <- favourite_birdTibble %>% 
+#   mutate(decodedstates = recode(decodedstates,
+#                                 `1` = "Gliding",
+#                                 `2` = "Soaring",
+#                                 `3` = "Perching"))
+# 
+# proj_palette1 <- proj_palette[1:3]
+# names(proj_palette1) <- unique(favourite_birdTibble$decodedstates)
+# 
+# # Create a color palette function
+# colorPalette <- colorFactor(proj_palette1, favourite_birdTibble$decodedstates)
+# 
+# # Create the map
+# leaflet_map <-  leaflet(favourite_birdTibble) %>%
+#   addProviderTiles(providers$Esri.WorldImagery) %>%
+#   addPolylines(lng = ~Longitude, lat = ~Latitude, color = "black") %>%
+#   addCircleMarkers(lng = ~Longitude, lat = ~Latitude, radius = 5,
+#                    color = ~colorPalette(decodedstates),
+#                    fillColor = ~colorPalette(decodedstates),
+#                    fillOpacity = 1,
+#                    popup = ~decodedstates) %>%
+#   addLegend("topleft", colors = proj_palette1,
+#             title = "<b>Decoded State",
+#             labels = paste("<b>", names(proj_palette1), "</b>"),
+#             opacity = 1) %>% 
+#   addScaleBar(position = "bottomright",
+#               options = scaleBarOptions(metric = TRUE, imperial = FALSE, maxWidth = 200))
 
 ```
 ### Using ggmap
 
 ```{r}
-favoriteBirdMap <- ggmap::get_stamenmap(bbox = c(left = min(favourite_birdTibble$Longitude),
-                              right = max(favourite_birdTibble$Longitude),
-                              bottom = min(favourite_birdTibble$Latitude),
-                              top = max(favourite_birdTibble$Latitude)),
-                              maptype = "terrain",
-                              crop = FALSE,
-                              zoom = 11)
-
-favoriteBirdMapAndTracks <- ggmap(favoriteBirdMap)+
-  geom_line(data = favourite_birdTibble, aes(x = Longitude, y = Latitude),
-            lwd = 0.1, col = "black") + 
-  geom_point(data = favourite_birdTibble, aes(x = Longitude, y = Latitude, col = decodedstates)) +
-  scale_color_manual(values = proj_palette) +
-  labs(title = "Segment 48 path",
-       x = "Longitude",
-       y = "Latitude") +
-  theme(plot.title = element_text(size = 14, face = "bold"),
-        axis.text = element_text(size = 12),
-        axis.title = element_text(size = 12),
-        legend.title = element_text(size = 12, face = "bold"),
-        legend.text = element_text(size = 10),
-        legend.position = "bottom")
-favoriteBirdMapAndTracks
-```
-## Try plotting the tracks in 3D
-
-
-
-```{r}
-fig <- plot_ly(favourite_birdTibble, x = ~Longitude, y = ~Latitude, z = ~Altitude, color = ~decodedstates,
-               colors = proj_palette[1:3])
-
-fig <- fig %>% add_markers()
-
-fig <- fig %>% layout(scene = list(xaxis = list(title = 'Longitude'),
-
-                     yaxis = list(title = 'Latitude'),
-
-                     zaxis = list(title = 'Altitude')))
-fig
+# favoriteBirdMap <- ggmap::get_stamenmap(bbox = c(left = min(favourite_birdTibble$Longitude),
+#                               right = max(favourite_birdTibble$Longitude),
+#                               bottom = min(favourite_birdTibble$Latitude),
+#                               top = max(favourite_birdTibble$Latitude)),
+#                               maptype = "terrain",
+#                               crop = FALSE,
+#                               zoom = 11)
+# 
+# favoriteBirdMapAndTracks <- ggmap(favoriteBirdMap)+
+#   geom_line(data = favourite_birdTibble, aes(x = Longitude, y = Latitude),
+#             lwd = 0.1, col = "black") + 
+#   geom_point(data = favourite_birdTibble, aes(x = Longitude, y = Latitude, col = decodedstates)) +
+#   scale_color_manual(values = proj_palette) +
+#   labs(title = "Segment 48 path",
+#        x = "Longitude",
+#        y = "Latitude") +
+#   theme(plot.title = element_text(size = 14, face = "bold"),
+#         axis.text = element_text(size = 12),
+#         axis.title = element_text(size = 12),
+#         legend.title = element_text(size = 12, face = "bold"),
+#         legend.text = element_text(size = 10),
+#         legend.position = "bottom")
+# favoriteBirdMapAndTracks
 ```
 
 # Investigate consequences of the correlation between the states
@@ -681,23 +636,6 @@ weibullNormalEagle <- tibble(horizontal_steps = qweibull(pnorm(X, 0, sqrt(covMat
                                                 scale = weibullParameters[2, ][statesForSim]),
                              vertical_steps = Y*normalParameters[2, ][statesForSim]+normalParameters[1, ][statesForSim],state = factor(statesForSim))
 
-# combinedEagleData <- bind_rows(
-#   mutate(select(eagleData, horizontal_steps, vertical_steps), Source = "Observed"),
-#   mutate(select(weibullNormalEagle, horizontal_steps, vertical_steps), Source = "Imitated")
-# ) %>% mutate(Source = as.factor(Source))
-
-# Plot the densities with facetting
-# ggplot(pivot_longer(data = combinedEagleData, cols = -Source, names_to = "variable", values_to = "value"),
-#        aes(x = value, color = Source)) +
-#   geom_density(linewidth = 2) +
-#   facet_wrap(~ variable, ncol = 1, scales = "free") +
-#   labs(x = "", y = "Density", fill = "") +
-#   scale_color_manual(values = c("Observed" = proj_palette[1], "Imitated" = proj_palette[2]))
-
-# ggplot(combinedEagleData, aes(x = horizontal_steps, y = vertical_steps)) +
-#   stat_density_2d(aes(fill = ..level..), geom = "polygon", colour="white") +
-#   facet_wrap(~Source, ncol = 1) +
-#   labs(x = "Horizontal Steps", y = "Vertical Steps") + scale_fill_gradient(low = proj_palette[1], high = proj_palette[2]) + scale_x_log10()
 
 ```
 
@@ -885,16 +823,6 @@ hiddenStateSequence_weibullnormal <- function(step1, # Values in weibull observa
   return(viterbi(step1, step2, par0))
 }
 
-```
-# Imitated eagle fit
-```{r}
-Gamma0 <- eagleFit1$mle$gamma
-delta0 <- eagleFit1$mle$delta[1, ]
-correlatedFit <-  fit_weibull_normal_hmmFullRcpp(weibullNormalEagle$horizontal_steps, weibullNormalEagle$vertical_steps,
-                               c(normalParameters[1, ], normalParameters[2, ], weibullParameters[1, ], weibullParameters[2, ]), Gamma0, delta0, covarianceMatrix = covMatEagle, 0.001)
-
-correlatedDecodedStates <- hiddenStateSequence_weibullnormal(weibullNormalEagle$horizontal_steps, weibullNormalEagle$vertical_steps, c(correlatedFit$mean_normal, correlatedFit$sd_normal, correlatedFit$shape_weibull, correlatedFit$scale_weibull), Gamma0, delta0, FALSE, covMatEagle, eps = 0.0001)
-
 logAlphaMove <- function(step1,step2,mu,sigma,k, lambda,
                          Gamma,delta, covariancematrix, eps)
 {
@@ -947,6 +875,19 @@ pseudoResMove <- function(step1, step2 ,mu, sigma, k, lambda,
   }
   return(list(weibullResiduals=step1Res,normalResiduals=step2Res))
 }
+Gamma0 <- eagleFit1$mle$gamma
+delta0 <- eagleFit1$mle$delta[1, ] # Starting parameters for later
+
+```
+# Imitated eagle fit
+```{r}
+correlatedFit <-  fit_weibull_normal_hmmFullRcpp(weibullNormalEagle$horizontal_steps, weibullNormalEagle$vertical_steps,
+                               c(normalParameters[1, ], normalParameters[2, ], weibullParameters[1, ], weibullParameters[2, ]), Gamma0, delta0, covarianceMatrix = covMatEagle, 0.001)
+
+correlatedDecodedStates <- hiddenStateSequence_weibullnormal(weibullNormalEagle$horizontal_steps, weibullNormalEagle$vertical_steps, c(correlatedFit$mean_normal, correlatedFit$sd_normal, correlatedFit$shape_weibull, correlatedFit$scale_weibull), Gamma0, delta0, FALSE, covMatEagle, eps = 0.0001)
+```
+
+```{r}
 
 pseudoResidualsWeibullNormal <- pseudoResMove(weibullNormalEagle$horizontal_steps, 
                                               weibullNormalEagle$vertical_steps,
@@ -956,83 +897,83 @@ pseudoResidualsWeibullNormal <- pseudoResMove(weibullNormalEagle$horizontal_step
                                               correlatedFit$scale_weibull,
                                               Gamma0, delta0, covMatEagle, eps = .0001)
 
-pseudoResidualsWeibullNormal1 <- tibble(weibull = pseudoResidualsWeibullNormal$weibullResiduals) %>% 
-  ggplot(aes(sample = weibull)) + 
-  geom_qq(alpha = .2) + 
-  geom_qq_line(color = "firebrick", linewidth = 1.5) +
-  labs(x = "Theoretical Quantiles (Horizontal steps)", y = "Observed Quantiles") +
-  theme_bw() +
-  theme(text = element_text(size = 12, face = "bold"), 
-        axis.title = element_text(face = "bold", size = 14),
-        plot.title = element_text(hjust = 0.5, size = 16)) 
-
-# Plot 2
-pseudoResidualsWeibullNormal2 <-  tibble(normal = pseudoResidualsWeibullNormal$normalResiduals) %>% 
-  ggplot(aes(sample = normal)) + 
-  geom_qq(alpha = .2) + 
-  geom_qq_line(color = "firebrick", linewidth = 1.5) +
-  labs(x = "Theoretical Quantiles (Vertical steps)", y = "Observed Quantiles") +
-  theme_bw() +
-  theme(text = element_text(size = 12, face = "bold"), 
-        axis.title = element_text(face = "bold", size = 14),
-        plot.title = element_text(hjust = 0.5, size = 16)) 
-
-ggsave(filename = "pseudoResidualsWeibullNormal1.jpeg", plot = pseudoResidualsWeibullNormal1, path = plotPath)
-ggsave(filename = "pseudoResidualsWeibullNormal2.jpeg", plot = pseudoResidualsWeibullNormal2, path = plotPath)
-
-# Specify the quantiles
-quantiles <- c(0.025, 0.25, 0.5, 0.75, 0.975)
-
-# Calculate the empirical quantiles for weibull residuals
-empirical_weibull <- quantile(pseudoResidualsWeibullNormal$weibullResiduals, probs = quantiles)
-
-# Calculate the empirical quantiles for normal residuals
-empirical_normal <- quantile(pseudoResidualsWeibullNormal$normalResiduals, probs = quantiles)
-
-# Calculate the theoretical quantiles of a standard normal distribution
-theoretical <- qnorm(quantiles)
-
-# Put them into a data frame
-df <- data.frame(
-  Quantile = quantiles,
-  Theoretical = theoretical,
-  Empirical_Weibull = empirical_weibull,
-  Empirical_Normal = empirical_normal
-)
-
-print(df)
-
-
-####--
-acf_vals <- acf(pseudoResidualsWeibullNormal$weibullResiduals, plot = FALSE)
-acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
-acfHorizontalPseudoResiduals1 <- ggplot(acftib[-1,], aes(x = lag, y = ACF)) +
-  geom_hline(yintercept = 0, color = "black", size = 1) +
-  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
-             color = proj_palette[3], linewidth = 1.5) +
-  geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
-  xlab("Lag (Horizontal pseudoresiduals)") +
-  ylab("") +
-  theme(plot.title = element_text(face = "bold"), 
-        axis.title = element_text(face = "bold"))
-
-acf_vals1 <-  acf(pseudoResidualsWeibullNormal$normalResiduals, plot = FALSE)
-acftib1 <- tibble(ACF = acf_vals1$acf, lag = acf_vals1$lag)
-acfVerticalPseudoResiduals1 <- ggplot(acftib1[-1,], aes(x = lag, y = ACF)) +
-  geom_hline(yintercept = 0, color = "black", size = 1) +
-  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
-             color = proj_palette[3], linewidth = 1.5) +
-  geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
-  xlab("Lag (Vertical pseudoresiduals") +
-  ylab("Autocorrelation") +
-  theme(plot.title = element_text(face = "bold"), 
-        axis.title = element_text(face = "bold"))
-
-ggsave(filename = "acfVerticalPseudoResiduals1.jpeg", plot = acfVerticalPseudoResiduals1,
-       path = plotPath)
-
-ggsave(filename = "acfHorizontalPseudoResiduals1.jpeg", plot = acfHorizontalPseudoResiduals1,
-       path = plotPath)
+# pseudoResidualsWeibullNormal1 <- tibble(weibull = pseudoResidualsWeibullNormal$weibullResiduals) %>% 
+#   ggplot(aes(sample = weibull)) + 
+#   geom_qq(alpha = .2) + 
+#   geom_qq_line(color = "firebrick", linewidth = 1.5) +
+#   labs(x = "Theoretical Quantiles (Horizontal steps)", y = "Observed Quantiles") +
+#   theme_bw() +
+#   theme(text = element_text(size = 12, face = "bold"), 
+#         axis.title = element_text(face = "bold", size = 14),
+#         plot.title = element_text(hjust = 0.5, size = 16)) 
+# 
+# # Plot 2
+# pseudoResidualsWeibullNormal2 <-  tibble(normal = pseudoResidualsWeibullNormal$normalResiduals) %>% 
+#   ggplot(aes(sample = normal)) + 
+#   geom_qq(alpha = .2) + 
+#   geom_qq_line(color = "firebrick", linewidth = 1.5) +
+#   labs(x = "Theoretical Quantiles (Vertical steps)", y = "Observed Quantiles") +
+#   theme_bw() +
+#   theme(text = element_text(size = 12, face = "bold"), 
+#         axis.title = element_text(face = "bold", size = 14),
+#         plot.title = element_text(hjust = 0.5, size = 16)) 
+# 
+# ggsave(filename = "pseudoResidualsWeibullNormal1.jpeg", plot = pseudoResidualsWeibullNormal1, path = plotPath)
+# ggsave(filename = "pseudoResidualsWeibullNormal2.jpeg", plot = pseudoResidualsWeibullNormal2, path = plotPath)
+# 
+# # Specify the quantiles
+# quantiles <- c(0.025, 0.25, 0.5, 0.75, 0.975)
+# 
+# # Calculate the empirical quantiles for weibull residuals
+# empirical_weibull <- quantile(pseudoResidualsWeibullNormal$weibullResiduals, probs = quantiles)
+# 
+# # Calculate the empirical quantiles for normal residuals
+# empirical_normal <- quantile(pseudoResidualsWeibullNormal$normalResiduals, probs = quantiles)
+# 
+# # Calculate the theoretical quantiles of a standard normal distribution
+# theoretical <- qnorm(quantiles)
+# 
+# # Put them into a data frame
+# df <- data.frame(
+#   Quantile = quantiles,
+#   Theoretical = theoretical,
+#   Empirical_Weibull = empirical_weibull,
+#   Empirical_Normal = empirical_normal
+# )
+# 
+# print(df)
+# 
+# 
+# ####--
+# acf_vals <- acf(pseudoResidualsWeibullNormal$weibullResiduals, plot = FALSE)
+# acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
+# acfHorizontalPseudoResiduals1 <- ggplot(acftib[-1,], aes(x = lag, y = ACF)) +
+#   geom_hline(yintercept = 0, color = "black", size = 1) +
+#   geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
+#              color = proj_palette[3], linewidth = 1.5) +
+#   geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
+#   xlab("Lag (Horizontal pseudoresiduals)") +
+#   ylab("Autocorrelation") +
+#   theme(plot.title = element_text(face = "bold"), 
+#         axis.title = element_text(face = "bold"))
+# 
+# acf_vals1 <-  acf(pseudoResidualsWeibullNormal$normalResiduals, plot = FALSE)
+# acftib1 <- tibble(ACF = acf_vals1$acf, lag = acf_vals1$lag)
+# acfVerticalPseudoResiduals1 <- ggplot(acftib1[-1,], aes(x = lag, y = ACF)) +
+#   geom_hline(yintercept = 0, color = "black", size = 1) +
+#   geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
+#              color = proj_palette[3], linewidth = 1.5) +
+#   geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
+#   xlab("Lag (Vertical pseudoresiduals)") +
+#   ylab("") +  
+#   theme(plot.title = element_text(face = "bold"), 
+#         axis.title = element_text(face = "bold"))
+# 
+# ggsave(filename = "acfVerticalPseudoResiduals1.jpeg", plot = acfVerticalPseudoResiduals1,
+#        path = plotPath)
+# 
+# ggsave(filename = "acfHorizontalPseudoResiduals1.jpeg", plot = acfHorizontalPseudoResiduals1,
+#        path = plotPath)
 ```
 # Real eagle fit
 ```{r}
@@ -1058,145 +999,195 @@ pseudoresEagleCorrelated<- pseudoResMove(eagleData$horizontal_steps,
                                               realEaglefitWeibullNormal$sd_normal,
                                               realEaglefitWeibullNormal$shape_weibull, 
                                               realEaglefitWeibullNormal$scale_weibull,
-                                              Gamma0, delta0, covMatEagle, eps = .0001)
+                                              Gamma0, delta0, covMatRealEagle, eps = .0001)
 
 ```
 
 ## Plot marginal weighted after state
 
 ```{r}
-numberAfterStateAlt <- correlatedDecodedStates1 %>% tibble(stateNum=.) %>% group_by(stateNum) %>% count() %>% ungroup() %>% mutate(prop = n/sum(n))
-num_observations <- c(numberAfterStateAlt$n[numberAfterStateAlt$stateNum == 1], 
-                      numberAfterStateAlt$n[numberAfterStateAlt$stateNum == 2], 
-                      numberAfterStateAlt$n[numberAfterStateAlt$stateNum == 3])
-
-# Generate the x values
-x <- density(eagleData$horizontal_steps)$x
-
-# Calculate the density values for each distribution
-pdf_values <- sapply(1:N, function(i) {
-  density <- dweibull(x, shape = realEaglefitWeibullNormal$shape_weibull[i],
-                      scale = realEaglefitWeibullNormal$scale_weibull[i])
-  density <- density * numberAfterState$prop[numberAfterState$stateNum == i]
-  density
-})
-
-
-
-# Create a data frame for the density values
-df <- data.frame(x = rep(x, (N+1)),
-                 density = as.vector(cbind(pdf_values, rowSums(pdf_values))),
-                 state = factor(rep(c(1:N, "Total"), each = length(x))))
-
-# Plot the density functions using ggplot2
-xCombinedDensityCorrelated <- ggplot() +
-  geom_histogram(data = eagleData, aes(x = horizontal_steps, after_stat(density)), fill = "steelblue", col = "black", bins = 100, linewidth = 0.5, alpha = .2) +
-  geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
-            lwd = 2, alpha = 1.5) +
-  geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
-          lwd = 1, alpha = 1.5, linetype = "dashed") +
-  xlab("Horizontal steps") +
-  ylab("Density") +
-  scale_color_manual(values = proj_palette,
-                     labels = c("Gliding", "Soaring", "Perching")) +
-  theme(text = element_text(size = 14, face = "bold"),
-        legend.position = "None") +
-  coord_cartesian(xlim = c(0, 2000))
-
-ggsave("xCombinedDensityCorrelated.jpeg", plot = xCombinedDensityCorrelated, path = plotPath, width = 6, height = 4, units = "in")
+# numberAfterStateAlt <- correlatedDecodedStates1 %>% tibble(stateNum=.) %>% group_by(stateNum) %>% count() %>% ungroup() %>% mutate(prop = n/sum(n))
+# num_observations <- c(numberAfterStateAlt$n[numberAfterStateAlt$stateNum == 1], 
+#                       numberAfterStateAlt$n[numberAfterStateAlt$stateNum == 2], 
+#                       numberAfterStateAlt$n[numberAfterStateAlt$stateNum == 3])
+# 
+# # Generate the x values
+# x <- density(eagleData$horizontal_steps)$x
+# 
+# # Calculate the density values for each distribution
+# pdf_values <- sapply(1:N, function(i) {
+#   density <- dweibull(x, shape = realEaglefitWeibullNormal$shape_weibull[i],
+#                       scale = realEaglefitWeibullNormal$scale_weibull[i])
+#   density <- density * numberAfterState$prop[numberAfterState$stateNum == i]
+#   density
+# })
+# 
+# 
+# 
+# # Create a data frame for the density values
+# df <- data.frame(x = rep(x, (N+1)),
+#                  density = as.vector(cbind(pdf_values, rowSums(pdf_values))),
+#                  state = factor(rep(c(1:N, "Total"), each = length(x))))
+# 
+# # Plot the density functions using ggplot2
+# xCombinedDensityCorrelated <- ggplot() +
+#   geom_histogram(data = eagleData, aes(x = horizontal_steps, after_stat(density)), fill = "steelblue", col = "black", bins = 100, linewidth = 0.5, alpha = .2) +
+#   geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
+#             lwd = 2, alpha = 1.5) +
+#   geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
+#           lwd = 1, alpha = 1.5, linetype = "dashed") +
+#   xlab("Horizontal steps") +
+#   ylab("Density") +
+#   scale_color_manual(values = proj_palette,
+#                      labels = c("Gliding", "Soaring", "Perching")) +
+#   theme(text = element_text(size = 14, face = "bold"),
+#         legend.position = "None") +
+#   coord_cartesian(xlim = c(0, 2000))
+# 
+# ggsave("xCombinedDensityCorrelated.jpeg", plot = xCombinedDensityCorrelated, path = plotPath, width = 6, height = 4, units = "in")
 ```
 
 # Now the vertical steps
 
 ```{r}
 # Generate the x values
-x <- density(eagleData$vertical_steps)$x
-
-# Calculate the density values for each distribution
-pdf_values <- sapply(1:N, function(i) {
-  density <- dnorm(x, mean = realEaglefitWeibullNormal$mean_normal[i],
-                      sd = realEaglefitWeibullNormal$sd_normal[i])
-  density <- density * numberAfterState$prop[numberAfterState$stateNum == i]
-  density
-})
-
-
-
-# Create a data frame for the density values
-df <- data.frame(x = rep(x, (N+1)),
-                 density = as.vector(cbind(pdf_values, rowSums(pdf_values))),
-                 state = factor(rep(c(1:N, "Total"), each = length(x))))
-
-# Plot the density functions using ggplot2
-yCombinedDensityCorrelated <- ggplot() +
-  geom_histogram(data = eagleData, aes(x = vertical_steps, after_stat(density)), fill = "steelblue", col = "black", bins = 200, linewidth = 0.5, alpha = .2) +
-  geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
-            lwd = 2, alpha = 1.5) +
-  geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
-          lwd = 1, alpha = 1.5, linetype = "dashed") +
-  xlab("Vertical steps") +
-  ylab("Density") +
-  scale_color_manual(values = proj_palette,
-                     labels = c("Gliding", "Soaring", "Perching")) +
-  theme(text = element_text(size = 14, face = "bold")) +
-  coord_cartesian(xlim = c(-500, 500))
-
-ggsave("yCombinedDensityCorrelated.jpeg", plot = yCombinedDensityCorrelated, path = plotPath, width = 6, height = 4, units = "in")
+# x <- density(eagleData$vertical_steps)$x
+# 
+# # Calculate the density values for each distribution
+# pdf_values <- sapply(1:N, function(i) {
+#   density <- dnorm(x, mean = realEaglefitWeibullNormal$mean_normal[i],
+#                       sd = realEaglefitWeibullNormal$sd_normal[i])
+#   density <- density * numberAfterState$prop[numberAfterState$stateNum == i]
+#   density
+# })
+# 
+# 
+# 
+# # Create a data frame for the density values
+# df <- data.frame(x = rep(x, (N+1)),
+#                  density = as.vector(cbind(pdf_values, rowSums(pdf_values))),
+#                  state = factor(rep(c(1:N, "Total"), each = length(x))))
+# 
+# # Plot the density functions using ggplot2
+# yCombinedDensityCorrelated <- ggplot() +
+#   geom_histogram(data = eagleData, aes(x = vertical_steps, after_stat(density)), fill = "steelblue", col = "black", bins = 200, linewidth = 0.5, alpha = .2) +
+#   geom_line(data = filter(df, state != "Total"), aes(x = x, y = density, color = state),
+#             lwd = 2, alpha = 1.5) +
+#   geom_line(data = filter(df, state == "Total"), aes(x = x, y = density),
+#           lwd = 1, alpha = 1.5, linetype = "dashed") +
+#   xlab("Vertical steps") +
+#   ylab("Density") +
+#   scale_color_manual(values = proj_palette,
+#                      labels = c("Gliding", "Soaring", "Perching")) +
+#   theme(text = element_text(size = 14, face = "bold")) +
+#   coord_cartesian(xlim = c(-500, 500))
+# 
+# ggsave("yCombinedDensityCorrelated.jpeg", plot = yCombinedDensityCorrelated, path = plotPath, width = 6, height = 4, units = "in")
 ```
 ## Residual plots
 
 ```{r}
-pseudoResRealFitCorrelatedWeibull <- tibble(weibull = pseudoresEagleCorrelated$weibullResiduals[is.finite(pseudoresEagleCorrelated$weibullResiduals)]) %>% 
-  ggplot(aes(sample = weibull)) + 
-  geom_qq(alpha = .2) + 
-  geom_qq_line(color = "firebrick", linewidth = 1.5) +
-  labs(x = "Theoretical Quantiles (Horizontal steps)", y = "Observed Quantiles") +
-  theme_bw() +
-  theme(text = element_text(size = 12, face = "bold"), 
-        axis.title = element_text(face = "bold", size = 14),
-        plot.title = element_text(hjust = 0.5, size = 16)) 
-
-ggsave("pseudoResRealFitCorrelatedWeibull.jpeg", plot = pseudoResRealFitCorrelatedWeibull, path = plotPath, width = 6, height = 4, units = "in")
+# pseudoResRealFitCorrelatedWeibull <- tibble(weibull = pseudoresEagleCorrelated$weibullResiduals[is.finite(pseudoresEagleCorrelated$weibullResiduals)]) %>% 
+#   ggplot(aes(sample = weibull)) + 
+#   geom_qq(alpha = .2) + 
+#   geom_qq_line(color = "firebrick", linewidth = 1.5) +
+#   labs(x = "Theoretical Quantiles (Horizontal steps)", y = "Observed Quantiles") +
+#   theme_bw() +
+#   theme(text = element_text(size = 12, face = "bold"), 
+#         axis.title = element_text(face = "bold", size = 14),
+#         plot.title = element_text(hjust = 0.5, size = 16))
+# 
+# ggsave("pseudoResRealFitCorrelatedWeibull.jpeg", plot = pseudoResRealFitCorrelatedWeibull, path = plotPath, width = 6, height = 4, units = "in")
 
 # Plot 2
-pseudoResRealFitCorrelatedNormal <-  tibble(normal = pseudoresEagleCorrelated$normalResiduals[is.finite(pseudoresEagleCorrelated$normalResiduals)])%>% 
-  ggplot(aes(sample = normal)) + 
-  geom_qq(alpha = .2) + 
-  geom_qq_line(color = "firebrick", linewidth = 1.5) +
-  labs(x = "Theoretical Quantiles (Vertical steps)", y = "Observed Quantiles") +
-  theme_bw() +
-  theme(text = element_text(size = 12, face = "bold"), 
-        axis.title = element_text(face = "bold", size = 14),
-        plot.title = element_text(hjust = 0.5, size = 16))
-
-ggsave("pseudoResRealFitCorrelatedNormal.jpeg", plot = pseudoResRealFitCorrelatedNormal, path = plotPath, width = 6, height = 4, units = "in")
+# pseudoResRealFitCorrelatedNormal <-  tibble(normal = pseudoresEagleCorrelated$normalResiduals[is.finite(pseudoresEagleCorrelated$normalResiduals)])%>% 
+#   ggplot(aes(sample = normal)) + 
+#   geom_qq(alpha = .2) + 
+#   geom_qq_line(color = "firebrick", linewidth = 1.5) +
+#   labs(x = "Theoretical Quantiles (Vertical steps)", y = "Observed Quantiles") +
+#   theme_bw() +
+#   theme(text = element_text(size = 12, face = "bold"), 
+#         axis.title = element_text(face = "bold", size = 14),
+#         plot.title = element_text(hjust = 0.5, size = 16))
+# 
+# ggsave("pseudoResRealFitCorrelatedNormal.jpeg", plot = pseudoResRealFitCorrelatedNormal, path = plotPath, width = 6, height = 4, units = "in")
 ```
 
 
 ```{r}
 ####--
-acf_vals <- acf(pseudoresEagleCorrelated$weibullResiduals[is.finite(pseudoresEagleCorrelated$weibullResiduals)], plot = FALSE)
-acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
-acfHorizontalPseudoResiduals1 <- ggplot(acftib[-1,], aes(x = lag, y = ACF)) +
-  geom_hline(yintercept = 0, color = "black", size = 1) +
-  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
-             color = proj_palette[3], linewidth = 1.5) +
-  geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
-  xlab("Lag (Horizontal pseudoresiduals)") +
-  ylab("") +
-  theme(plot.title = element_text(face = "bold"), 
-        axis.title = element_text(face = "bold"))
+# acf_vals <- acf(pseudoresEagleCorrelated$weibullResiduals[is.finite(pseudoresEagleCorrelated$weibullResiduals)], plot = FALSE)
+# acftib <- tibble(ACF = acf_vals$acf, lag = acf_vals$lag)
+# acfHorizontalPseudoResiduals1 <- ggplot(acftib[-1,], aes(x = lag, y = ACF)) +
+#   geom_hline(yintercept = 0, color = "black", size = 1) +
+#   geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
+#              color = proj_palette[3], linewidth = 1.5) +
+#   geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
+#   xlab("Lag (Horizontal pseudoresiduals)") +
+#   ylab("") +
+#   theme(plot.title = element_text(face = "bold"), 
+#         axis.title = element_text(face = "bold"))
+# 
+# acf_vals1 <-  acf(pseudoresEagleCorrelated$normalResiduals[is.finite(pseudoresEagleCorrelated$normalResiduals)], plot = FALSE)
+# acftib1 <- tibble(ACF = acf_vals1$acf, lag = acf_vals1$lag)
+# acfVerticalPseudoResiduals1 <- ggplot(acftib1[-1,], aes(x = lag, y = ACF)) +
+#   geom_hline(yintercept = 0, color = "black", size = 1) +
+#   geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
+#              color = proj_palette[3], linewidth = 1.5) +
+#   geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
+#   xlab("Lag (Vertical pseudoresiduals") +
+#   ylab("Autocorrelation") +
+#   theme(plot.title = element_text(face = "bold"), 
+#         axis.title = element_text(face = "bold"))
+```
 
-acf_vals1 <-  acf(pseudoresEagleCorrelated$normalResiduals[is.finite(pseudoresEagleCorrelated$normalResiduals)], plot = FALSE)
-acftib1 <- tibble(ACF = acf_vals1$acf, lag = acf_vals1$lag)
-acfVerticalPseudoResiduals1 <- ggplot(acftib1[-1,], aes(x = lag, y = ACF)) +
-  geom_hline(yintercept = 0, color = "black", size = 1) +
-  geom_hline(yintercept = c(0.025, -0.025), linetype = "dashed",
-             color = proj_palette[3], linewidth = 1.5) +
-  geom_segment(aes(xend = lag, yend = 0), color = "black", size = 1) +
-  xlab("Lag (Vertical pseudoresiduals") +
-  ylab("Autocorrelation") +
-  theme(plot.title = element_text(face = "bold"), 
-        axis.title = element_text(face = "bold"))
+```{r}
+
+# Calculate proportions for decodedstates
+decodedstates_prop <- eagleData %>% 
+  group_by(Segment_ID, decodedstates) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(Segment_ID) %>%
+  mutate(prop_decodedstates = n/sum(n)) %>%
+  ungroup() %>%
+  dplyr::select(-n) %>%
+  pivot_wider(names_from = "decodedstates", values_from = "prop_decodedstates") %>%
+  replace_na(list(`1` = 0, `2` = 0, `3` = 0)) %>%
+  rename_with(~paste0(., "_decodedstates"), -Segment_ID)
+
+# Calculate proportions for altdecodedstates
+altdecodedstates_prop <- eagleData %>% 
+  group_by(Segment_ID, AltDecodedStates) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(Segment_ID) %>%
+  mutate(prop_altdecodedstates = n/sum(n)) %>%
+  ungroup() %>%
+  dplyr::select(-n) %>%
+  pivot_wider(names_from = "AltDecodedStates", values_from = "prop_altdecodedstates") %>%
+  replace_na(list(`1` = 0, `2` = 0, `3` = 0)) %>%
+  rename_with(~paste0(., "_AltDecodedStates"), -Segment_ID)
+
+# Join both tables
+prop_table <- full_join(decodedstates_prop, altdecodedstates_prop, by = "Segment_ID")
+
+diff_prop_table <- prop_table %>%
+  filter(`1_decodedstates` > 0 & `2_decodedstates` > 0 & `3_decodedstates` > 0 &
+           `1_AltDecodedStates` > 0 & `2_AltDecodedStates` > 0 & `3_AltDecodedStates` > 0) %>%
+  mutate(diff1 = `1_decodedstates` - `1_AltDecodedStates`,
+         diff2 = `2_decodedstates` - `2_AltDecodedStates`,
+         diff3 = `3_decodedstates` - `3_AltDecodedStates`)
+diff_prop_table
+
+```
+
+```{r}
+eagleData %>% filter(Segment_ID == "152") %>% ggplot(aes(x = seq_along(Altitude), y = Altitude)) +
+  geom_line() + 
+  geom_point(aes(col = decodedstates))
+
+eagleData %>% filter(Segment_ID == "152") %>% ggplot(aes(x = seq_along(Altitude), y = Altitude)) +
+  geom_line() + 
+  geom_point(aes(col = AltDecodedStates))
+
 ```
 

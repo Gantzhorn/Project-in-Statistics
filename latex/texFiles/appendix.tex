@@ -1,6 +1,7 @@
 \section{Source code}\label{sourceCode}
 The source code for this project is in the Github repository by the name of \href{https://github.com/Gantzhorn/Project-in-Statistics}{Project-In-Statistics}. The owner of the repository is \textit{Gantzhorner}. Do note that it it licensed under the GNU General Public License v3.0. Select source code is shown in appendix \ref{sourceCodeImplementation}.
-\section{Summary statistics and marginal distributions for the golden eagle data}\label{summarStatistics}
+\section{Summary statistics and marginal distributions for the golden eagle data}
+\label{summarStatistics}
 \begin{table}[ht]
     \centering
     \begin{tabular}{lllll}
@@ -149,6 +150,24 @@ This part shows different additional plots and graphs found in the modelling and
   \caption{Mean and standard deviation of the initial fit for each dimension and state}
   \label{finalFitMeans}
 \end{table}
+\begin{table}[h]
+  \centering
+  \begin{tabular}{ccc}
+      \hline
+      \textbf{Original Decoded State} & \textbf{New Decoded State} & \textbf{Count} \\
+      \hline
+      1 & 1 & 15713 \\
+      1 & 2 & 2260 \\
+      2 & 1 & 2571 \\
+      2 & 2 & 20484 \\
+      2 & 3 & 168 \\
+      3 & 2 & 101 \\
+      3 & 3 & 4018 \\
+      \hline
+  \end{tabular}
+  \caption{Change in decoding from the Viterbi algorithm, between our initial and final fit.}
+  \label{changeEstimFit}
+\end{table}
 \newpage
 \section{Finding the density of the Weibull-Gaussian distribution}\label{weibullGaussianAppendix}
 To find the density of the Weibull-Gaussian distribution, we let $(X_1, X_2)$ be bivariate gaussian with mean vector, $\xi = \mathbf{0}$ and covariance matrix $\Sigma = \begin{pmatrix}
@@ -188,7 +207,7 @@ Differentiating and setting into the definition of the jacobian yields:
 \end{align}
 where $\varphi$ is the density of the standard normal distribution. We can then obtain the density by combining above formulae.
 \newpage
-\section{Benchmark for various implementations}\label{sourceCodeImplementation}
+\section{Source code for various implementations}\label{sourceCodeImplementation}
 \subsection{Implementation of bivariate weibull-normal density in C++}\label{densityImplementation}
 \begin{lstlisting}[language=C++]
     #include <Rcpp.h>
@@ -323,8 +342,8 @@ fit_weibull_normal_hmmFullRcpp <- function(step1, step2, par, Gamma, delta, cova
 }
 \end{lstlisting}
 \newpage
-\section{Benchmark for various implementations}\label{benchmarkSection}
-In the section we show the results of various benchmarks using \cite{microbenchmark}. The implementations were run with the following hardware and software.
+\section{Benchmark the markov chain sampler}\label{benchmarkSection}
+In the section we show the results of a small benchmark using \cite{microbenchmark}. The implementations were run with the following hardware and software.
 \begin{table}[ht]
     \centering
     \begin{tabular}{ll}
@@ -340,7 +359,7 @@ In the section we show the results of various benchmarks using \cite{microbenchm
       \hline
     \end{tabular}
   \end{table}
-\subsection{Markov chain sampler}
+\subsection*{The Markov chain sampler}
 We compare the two markov chain samplers
 \begin{figure}[h!]
     \centering
